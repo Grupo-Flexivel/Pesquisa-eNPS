@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'desligamentos',
     'organizacao',
     'talentos',
+    'vagas',
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Candidatura · {{ vaga.titulo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .external-wrap {
+        background-image:
+            linear-gradient(
+                rgba(0, 75, 70, 0.55),
+                rgba(0, 75, 70, 0.55)
+            ),
+            url("{% static 'pesquisas/img/background.jpg' %}") !important;
+
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: fixed !important;
+
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        min-height: 100vh !important;
+        padding: 2rem !important;
+    }
+
+    .login-container {
+        width: 100%;
+        max-width: 720px;
+        margin: 0 auto;
+    }
+
+    .login-logo {
+        max-width: 220px;
+        height: auto;
+        display: block;
+        margin: 0 auto 1.75rem auto;
+    }
+
+    .login-card {
+        padding: 3rem 2.5rem !important;
+    }
+
+    @media (max-width: 575.98px) {
+        .login-card { padding: 2rem 1.25rem !important; }
+    }
+
+    .vaga-descricao {
+    }
+
+    .vaga-divisor {
+        border: 0;
+        border-top: 2px solid rgba(0, 75, 70, .15);
+        margin: 2rem 0;
+    }
+
+    .btn-outline-primary {
+        color: #004b46 !important;
+        border-color: #004b46 !important;
+    }
+
+    .btn-outline-primary:hover,
+    .btn-outline-primary:focus,
+    .btn-outline-primary:active,
+    .btn-check:checked + .btn-outline-primary {
+        background-color: #004b46 !important;
+        border-color: #004b46 !important;
+        color: #ffffff !important;
+    }
+
+    .opcao-row {
+        display: block;
+        border: 1px solid #dee2e6;
+        border-radius: .6rem;
+        padding: .65rem .9rem;
+        margin-bottom: .5rem;
+        cursor: pointer;
+    }
+    .opcao-row input { margin-right: .6rem; }
+    .opcao-row.selecionada { border-color: #004b46; background: rgba(0, 75, 70, .06); }
+</style>
+{% endblock %}
+
+{% block public_content %}
+<div class="login-container">
+    <img src="{% static 'pesquisas/img/logo-grupo-flexivel.png' %}" alt="Grupo Flexível" class="login-logo">
+
+    <div class="card login-card shadow-lg">
+        <h1 class="h3 mb-3">{{ vaga.titulo }}</h1>
+        <div class="vaga-descricao mb-0">{{ vaga.descricao|safe }}</div>
+
+        <hr class="vaga-divisor">
+
+        <p class="text-secondary mb-4">Preencha as perguntas abaixo para concluir sua candidatura.</p>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+            {% for pergunta, campo in form.perguntas_com_campo %}
+                <div class="mb-4 {% if not forloop.last %}border-bottom pb-4{% endif %}">
+                    <label class="form-label fw-semibold">{{ pergunta.texto_pergunta }}</label>
+                    {% if pergunta.tipo_resposta == 'NOTA_0_10' %}
+                        <div class="d-flex flex-wrap gap-2">
+                            {% for radio in campo %}
+                                <label class="btn btn-outline-primary px-3">
+                                    {{ radio.tag }} {{ radio.choice_label }}
+                                </label>
+                            {% endfor %}
+                        </div>
+                    {% elif pergunta.tipo_resposta == 'RADIO' or pergunta.tipo_resposta == 'CHECKBOX' %}
+                        {% for opcao in campo %}
+                            <label class="opcao-row">
+                                {{ opcao.tag }} {{ opcao.choice_label }}
+                            </label>
+                        {% endfor %}
+                    {% else %}
+                        {{ campo }}
+                    {% endif %}
+                    <div class="text-danger small">{{ campo.errors }}</div>
+                </div>
+            {% endfor %}
+
+            <button class="btn btn-primary btn-lg w-100 text-white mt-2" type="submit">
+                Enviar candidatura <i class="bi bi-arrow-right"></i>
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('.opcao-row input').forEach(input => {
+        const row = input.closest('.opcao-row');
+        const sync = () => row.classList.toggle('selecionada', input.checked);
+        input.addEventListener('change', () => {
+            if (input.type === 'radio') {
+                row.closest('.mb-4').querySelectorAll('.opcao-row').forEach(r => r.classList.remove('selecionada'));
+            }
+            sync();
+        });
+        sync();
+    });
+</script>
+{% endblock %}

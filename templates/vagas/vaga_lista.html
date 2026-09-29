@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}Vagas internas · recrutamento{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Vagas internas</h1>
+        <p class="text-secondary mb-0">Gerencie as vagas de recrutamento interno e acompanhe as candidaturas recebidas.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'vagas:vaga_criar' %}">
+        <i class="bi bi-plus-lg"></i> Nova vaga
+    </a>
+</div>
+
+<div class="card p-4">
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Título</th>
+                    <th>Período de candidaturas</th>
+                    <th>Status</th>
+                    <th>Candidaturas</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vaga in vagas %}
+                <tr>
+                    <td class="fw-semibold">{{ vaga.titulo }}</td>
+                    <td>{{ vaga.data_abertura|date:'d/m/Y H:i' }} até {{ vaga.data_encerramento|date:'d/m/Y H:i' }}</td>
+                    <td>
+                        {% if vaga.status == 'AGENDADA' %}
+                            <span class="badge text-bg-warning">{{ vaga.status.label }}</span>
+                        {% elif vaga.status == 'EM_ANDAMENTO' %}
+                            <span class="badge text-bg-success">{{ vaga.status.label }}</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">{{ vaga.status.label }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ vaga.candidaturas.all|length }}</td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'vagas:vaga_detalhe' vaga.pk %}" title="Detalhes">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        <a class="btn btn-sm btn-primary" href="{% url 'vagas:vaga_editar' vaga.pk %}" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ vaga.pk }}" title="Excluir">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+
+                <div class="modal fade" id="deleteModal{{ vaga.pk }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Confirmar exclusão</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                            </div>
+                            <div class="modal-body text-start">
+                                Tem certeza que deseja excluir a vaga <strong>"{{ vaga.titulo }}"</strong>? Esta ação não poderá ser desfeita.
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <form action="{% url 'vagas:vaga_excluir' vaga.pk %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger">Sim, excluir</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-secondary py-4">Nenhuma vaga cadastrada.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

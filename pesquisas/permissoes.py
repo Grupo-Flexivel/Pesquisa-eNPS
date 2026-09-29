@@ -18,6 +18,7 @@ from django.core.exceptions import PermissionDenied
 
 ENPS = 'enps'
 DESLIGAMENTOS = 'desligamentos'
+VAGAS = 'vagas'
 GERAL = 'geral'
 TALENTOS = 'talentos'
 TALENTOS_DASHBOARD = 'talentos.dashboard'
@@ -31,6 +32,7 @@ MODULOS_CHOICES = [
     (GERAL, 'Módulo Geral'), # <-- 2. Adicionado nas opções do formulário
     (ENPS, 'eNPS'),
     (DESLIGAMENTOS, 'Desligamento'),
+    (VAGAS, 'Recrutamento interno (vagas)'),
     (TALENTOS, 'Banco de Talentos (todos os submódulos)'),
     (TALENTOS_DASHBOARD, 'Banco de Talentos › Dashboard'),
     (TALENTOS_ORGANIZACAO, 'Banco de Talentos › Estrutura organizacional'),
@@ -68,6 +70,7 @@ def contexto_acesso(user):
         'geral': usuario_tem_acesso(user, GERAL),
         'enps': usuario_tem_acesso(user, ENPS),
         'desligamentos': usuario_tem_acesso(user, DESLIGAMENTOS),
+        'vagas': usuario_tem_acesso(user, VAGAS),
         'colaboradores': usuario_tem_acesso(user, ENPS, DESLIGAMENTOS),
         'talentos_organizacao': usuario_tem_acesso(user, TALENTOS_ORGANIZACAO),
         'talentos_curriculos': usuario_tem_acesso(user, TALENTOS_CURRICULOS),
@@ -87,6 +90,8 @@ def pagina_inicial(user):
         return 'geral:home' 
     if usuario_tem_acesso(user, ENPS, DESLIGAMENTOS):
         return 'pesquisas:dashboard'
+    if usuario_tem_acesso(user, VAGAS):
+        return 'vagas:vaga_lista'
     if usuario_tem_acesso(user, TALENTOS_DASHBOARD):
         return 'talentos:painel'
     if usuario_tem_acesso(user, TALENTOS_KANBAN):

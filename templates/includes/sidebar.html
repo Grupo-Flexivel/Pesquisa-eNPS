@@ -51,6 +51,15 @@
         </a>
         {% endif %}
 
+        <!-- Módulo Recrutamento Interno -->
+        {% if acesso.vagas %}
+        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Recrutamento Interno</div>
+
+        <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'vaga_lista' or request.resolver_match.url_name == 'vaga_criar' or request.resolver_match.url_name == 'vaga_detalhe' or request.resolver_match.url_name == 'vaga_editar' %}active{% endif %}" href="{% url 'vagas:vaga_lista' %}">
+            <i class="bi bi-briefcase me-2"></i><span class="label">Vagas internas</span>
+        </a>
+        {% endif %}
+
         <!-- Módulo Banco de Talentos -->
         {% if acesso.talentos %}
         <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Banco de Talentos</div>

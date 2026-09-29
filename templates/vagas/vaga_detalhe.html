@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}{{ vaga.titulo }} · recrutamento{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">{{ vaga.titulo }}</h1>
+        <p class="text-secondary mb-0">
+            {% if vaga.status == 'AGENDADA' %}
+                <span class="badge text-bg-warning">{{ vaga.status.label }}</span>
+            {% elif vaga.status == 'EM_ANDAMENTO' %}
+                <span class="badge text-bg-success">{{ vaga.status.label }}</span>
+            {% else %}
+                <span class="badge text-bg-secondary">{{ vaga.status.label }}</span>
+            {% endif %}
+            Candidaturas de {{ vaga.data_abertura|date:'d/m/Y H:i' }} até {{ vaga.data_encerramento|date:'d/m/Y H:i' }}
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'vagas:vaga_lista' %}">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+        <a class="btn btn-primary" href="{% url 'vagas:vaga_editar' vaga.pk %}">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-lg-8">
+        <div class="card p-4 h-100">
+            <h2 class="h5 mb-3">Descrição da vaga</h2>
+            <div class="mb-0">{{ vaga.descricao|safe }}</div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card p-4 h-100 text-center">
+            <h2 class="h5 mb-3">Link e QR Code</h2>
+            <img src="{% url 'vagas:vaga_qrcode' vaga.pk %}" alt="QR Code da vaga" class="img-fluid mb-3" style="max-width: 180px; margin: 0 auto;">
+            <div class="input-group input-group-sm mb-3">
+                <input class="form-control" readonly value="{{ vaga.link_completo }}" id="link-vaga">
+                <button class="btn btn-outline-secondary copy-link" data-target="link-vaga" title="Copiar">
+                    <i class="bi bi-copy"></i>
+                </button>
+            </div>
+            <a class="btn btn-primary" href="{% url 'vagas:vaga_qrcode' vaga.pk %}" download="vaga-{{ vaga.pk }}-qrcode.png">
+                <i class="bi bi-download"></i> Baixar QR Code
+            </a>
+            <p class="small text-secondary mt-3 mb-0">Ideal para impressão e fixação em murais físicos da empresa.</p>
+        </div>
+    </div>
+</div>
+
+<div class="card p-4">
+    <h2 class="h5 mb-3">Candidaturas recebidas <span class="badge text-bg-secondary">{{ candidaturas|length }}</span></h2>
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Colaborador</th>
+                    <th>Empresa</th>
+                    <th>Data da candidatura</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for candidatura in candidaturas %}
+                <tr>
+                    <td class="fw-semibold">{{ candidatura.colaborador.nome }}</td>
+                    <td>{{ candidatura.colaborador.empresa.nome }}</td>
+                    <td>{{ candidatura.data_candidatura|date:'d/m/Y H:i' }}</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-primary" href="{% url 'vagas:candidatura_respostas' candidatura.pk %}">
+                            <i class="bi bi-eye"></i> Ver respostas
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-secondary py-4">Nenhuma candidatura recebida ainda.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.querySelectorAll('.copy-link').forEach(button => button.addEventListener('click', async event => {
+        event.preventDefault();
+        const input = document.getElementById(button.dataset.target);
+        await navigator.clipboard.writeText(input.value);
+        button.innerHTML = '<i class="bi bi-check2"></i>';
+        setTimeout(() => button.innerHTML = '<i class="bi bi-copy"></i>', 1200);
+    }));
+</script>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Obrigado · {{ vaga.titulo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .external-wrap {
+        background-image:
+            linear-gradient(
+                rgba(0, 75, 70, 0.55),
+                rgba(0, 75, 70, 0.55)
+            ),
+            url("{% static 'pesquisas/img/background.jpg' %}") !important;
+
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: fixed !important;
+
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        min-height: 100vh !important;
+        padding: 2rem !important;
+    }
+
+    .login-container {
+        width: 100%;
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    .login-logo {
+        max-width: 220px;
+        height: auto;
+        display: block;
+        margin: 0 auto 1.75rem auto;
+    }
+
+    .login-card {
+        padding: 3rem 2.5rem !important;
+    }
+
+    .text-success {
+        color: #004b46 !important;
+    }
+</style>
+{% endblock %}
+
+{% block public_content %}
+<div class="login-container">
+    <img src="{% static 'pesquisas/img/logo-grupo-flexivel.png' %}" alt="Grupo Flexível" class="login-logo">
+
+    <div class="card login-card text-center shadow-lg">
+        <div class="display-4 text-success mb-2">
+            <i class="bi bi-check-circle"></i>
+        </div>
+        <h1 class="h3 mt-3">Candidatura enviada!</h1>
+        <p class="text-secondary mb-0">Sua candidatura para a vaga “{{ vaga.titulo }}” foi registrada com sucesso. Boa sorte!</p>
+    </div>
+</div>
+{% endblock %}

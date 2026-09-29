@@ -28,6 +28,7 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path('', include('pesquisas.urls')),
     path('', include('desligamentos.urls')),
+    path('', include('vagas.urls')),
     path('banco-de-talentos/organizacao/', include('organizacao.urls')),
     path('banco-de-talentos/curriculos/', include('talentos.urls')),
 ]

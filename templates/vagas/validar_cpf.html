@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ vaga.titulo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .external-wrap {
+        background-image:
+            linear-gradient(
+                rgba(0, 75, 70, 0.55),
+                rgba(0, 75, 70, 0.55)
+            ),
+            url("{% static 'pesquisas/img/background.jpg' %}") !important;
+
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: fixed !important;
+
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        min-height: 100vh !important;
+        padding: 2rem !important;
+    }
+
+    .login-container {
+        width: 100%;
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    .login-logo {
+        max-width: 220px;
+        height: auto;
+        display: block;
+        margin: 0 auto 1.75rem auto;
+    }
+
+    .login-card {
+        padding: 3rem 2.5rem !important;
+    }
+
+    .badge-status-AGENDADA { background-color: #fff3cd !important; color: #664d03 !important; }
+    .badge-status-EM_ANDAMENTO { background-color: #d1e7dd !important; color: #0f5132 !important; }
+    .badge-status-ENCERRADA { background-color: #e2e3e5 !important; color: #41464b !important; }
+</style>
+{% endblock %}
+
+{% block public_content %}
+<div class="login-container">
+    <img src="{% static 'pesquisas/img/logo-grupo-flexivel.png' %}" alt="Grupo Flexível" class="login-logo">
+
+    <div class="card login-card shadow-lg">
+        <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+            <h1 class="h3 mb-0">{{ vaga.titulo }}</h1>
+            <span class="badge badge-status-{{ vaga.status }} text-nowrap">{{ vaga.status.label }}</span>
+        </div>
+        <p class="text-secondary mb-4">Você está acessando a candidatura para esta vaga específica.</p>
+
+        {% if aviso %}
+            <div class="alert alert-warning">{{ aviso }}</div>
+        {% endif %}
+        {% if erro %}
+            <div class="alert alert-danger">{{ erro }}</div>
+        {% endif %}
+
+        {% if pode_candidatar %}
+            <p class="text-secondary mb-4">Informe seu CPF para confirmar que você é um colaborador ativo e acessar o formulário de candidatura desta vaga.</p>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <div class="mb-4">
+                    {{ form.documento.label_tag }}
+                    {{ form.documento }}
+                    <div class="text-danger small">{{ form.documento.errors }}</div>
+                </div>
+                <button class="btn btn-primary btn-lg w-100 text-white mt-2" type="submit">
+                    Continuar
+                </button>
+            </form>
+
+            <p class="small text-secondary mt-4 mb-0">
+                <i class="bi bi-shield-lock"></i> Suas informações são tratadas com confidencialidade.
+            </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

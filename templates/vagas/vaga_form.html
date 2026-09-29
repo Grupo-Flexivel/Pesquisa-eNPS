@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}{% if vaga %}Editar{% else %}Nova{% endif %} vaga · recrutamento{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-4">{% if vaga %}Editar vaga{% else %}Nova vaga{% endif %}</h1>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    <div class="card p-4 mb-3">
+        <h2 class="h5 mb-3">Informações gerais</h2>
+        {{ form.non_field_errors }}
+        <div class="row g-3">
+            {% for field in form %}
+                <div class="{% if field.name == 'titulo' or field.name == 'descricao' %}col-12{% else %}col-md-6{% endif %}">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    <div class="text-danger small">{{ field.errors }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="h5 mb-1">Perguntas da candidatura</h2>
+                <p class="text-secondary small mb-0">Texto, nota de 0 a 10, múltipla escolha (escolha única) ou caixa de seleção (múltiplas escolhas).</p>
+            </div>
+            <button class="btn btn-sm text-white align-self-start shadow-none" type="button" id="addQuestion" style="background-color: #004b46; border-color: #004b46;" onmouseover="this.style.backgroundColor='#00665e'; this.style.borderColor='#005c54';" onmouseout="this.style.backgroundColor='#004b46'; this.style.borderColor='#004b46';">
+                <i class="bi bi-plus"></i> Adicionar
+            </button>
+        </div>
+
+        {{ formset.management_form }}
+        <div class="text-danger">{{ formset.non_form_errors }}</div>
+
+        <div id="questions">
+            {% for question_form in formset %}
+                <div class="question-form border rounded-3 p-3 mb-3">
+                    {% for hidden in question_form.hidden_fields %}
+                        {{ hidden }}
+                    {% endfor %}
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            {{ question_form.texto_pergunta.label_tag }}
+                            {{ question_form.texto_pergunta }}
+                            <div class="text-danger small">{{ question_form.texto_pergunta.errors }}</div>
+                        </div>
+                        <div class="col-md-3">
+                            {{ question_form.tipo_resposta.label_tag }}
+                            {{ question_form.tipo_resposta }}
+                            <div class="text-danger small">{{ question_form.tipo_resposta.errors }}</div>
+                        </div>
+                        <div class="col-md-2">
+                            {{ question_form.ordem.label_tag }}
+                            {{ question_form.ordem }}
+                            <div class="text-danger small">{{ question_form.ordem.errors }}</div>
+                        </div>
+                        <div class="col-12 opcoes-wrap" style="display: none;">
+                            {{ question_form.opcoes_texto.label_tag }}
+                            {{ question_form.opcoes_texto }}
+                            <div class="text-danger small">{{ question_form.opcoes_texto.errors }}</div>
+                        </div>
+
+                        {% if question_form.instance.pk %}
+                            <div class="col-12 form-check ms-2 mt-2">
+                                {{ question_form.DELETE }} {{ question_form.DELETE.label_tag }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <template id="emptyQuestion">
+            <div class="question-form border rounded-3 p-3 mb-3">
+                <div class="row g-3">
+                    <div class="col-md-7">
+                        {{ formset.empty_form.texto_pergunta.label_tag }}
+                        {{ formset.empty_form.texto_pergunta }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ formset.empty_form.tipo_resposta.label_tag }}
+                        {{ formset.empty_form.tipo_resposta }}
+                    </div>
+                    <div class="col-md-2">
+                        {{ formset.empty_form.ordem.label_tag }}
+                        {{ formset.empty_form.ordem }}
+                    </div>
+                    <div class="col-12 opcoes-wrap" style="display: none;">
+                        {{ formset.empty_form.opcoes_texto.label_tag }}
+                        {{ formset.empty_form.opcoes_texto }}
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <div class="mt-3">
+            <button class="btn btn-primary" type="submit">Salvar vaga</button>
+            <a class="btn btn-light" href="{% url 'vagas:vaga_lista' %}">Cancelar</a>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Script CDN do TinyMCE (Mini Word) -->
+<script src="https://cdn.jsdelivr.net/npm/tinymce@6/tinymce.min.js" referrerpolicy="origin"></script>
+
+<script>
+    function traduzirSelectsVazios() {
+        document.querySelectorAll('select').forEach(select => {
+            select.querySelectorAll('option').forEach(option => {
+                if (option.value === "" && (option.text.includes("Select") || option.text.includes("---------"))) {
+                    option.text = "Selecione uma opção";
+                }
+            });
+        });
+    }
+
+    function toggleOpcoes(questionEl) {
+        const select = questionEl.querySelector('select[name$="-tipo_resposta"]');
+        const wrap = questionEl.querySelector('.opcoes-wrap');
+        if (!select || !wrap) return;
+        wrap.style.display = (select.value === 'RADIO' || select.value === 'CHECKBOX') ? 'block' : 'none';
+    }
+
+    function ligarEventosPergunta(questionEl) {
+        toggleOpcoes(questionEl);
+        const select = questionEl.querySelector('select[name$="-tipo_resposta"]');
+        if (select) {
+            select.addEventListener('change', () => toggleOpcoes(questionEl));
+        }
+    }
+
+    // Função para inicializar o TinyMCE no campo de descrição da Vaga
+    function inicializarTinyMCE() {
+        tinymce.init({
+            selector: 'textarea[name="descricao"]', // Alvo exclusivo no campo de descrição da vaga
+            height: 350,
+            plugins: 'advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table help wordcount',
+            toolbar: 'undo redo | formatselect | bold italic underline forecolor backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat',
+            language: 'pt_BR',
+            branding: false,
+            promotion: false,
+            statusbar: false
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        traduzirSelectsVazios();
+        document.querySelectorAll('#questions .question-form').forEach(ligarEventosPergunta);
+        inicializarTinyMCE();
+    });
+
+    const addBtn = document.getElementById('addQuestion');
+    if (addBtn) {
+        addBtn.endswith = addBtn.addEventListener('click', () => {
+            const total = document.getElementById('id_perguntas-TOTAL_FORMS');
+            const index = Number(total.value);
+            const html = document.getElementById('emptyQuestion').innerHTML.replaceAll('__prefix__', index);
+            document.getElementById('questions').insertAdjacentHTML('beforeend', html);
+            total.value = index + 1;
+
+            traduzirSelectsVazios();
+            const novo = document.getElementById('questions').lastElementChild;
+            ligarEventosPergunta(novo);
+        });
+    }
+</script>
+{% endblock %}
