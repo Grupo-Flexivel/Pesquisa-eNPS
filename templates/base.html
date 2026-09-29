@@ -12,37 +12,85 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
-        :root { --sidebar-width: 270px; --sidebar-collapsed: 78px; --brand: #004b46; }
-        body { background: #f5f6fa; color: #202334; }
-        .app-shell { min-height: 100vh; display: flex; }
-        .sidebar { width: var(--sidebar-width); background: #004b46; color: white; transition: width .2s ease; flex-shrink: 0; }
-        .sidebar.collapsed { width: var(--sidebar-collapsed); }
+        :root { --sidebar-width: 325px; --sidebar-collapsed: 78px; --brand: #004b46; }
+        body { background: #f5f6fa; color: #202334; overflow-x: hidden; }
+        html { overflow-x: hidden; }
+
+        .app-shell { min-height: 100vh; width: 100%; max-width: 100vw; }
+
+        /* Sidebar isolada do fluxo (fixed) para que sua altura/rolagem nunca dependam do overflow de ancestrais
+           (overflow-x:hidden no body/html quebra position:sticky em vários navegadores — por isso fixed aqui). */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: #004b46;
+            color: white;
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: width .25s ease;
+            z-index: 1030;
+        }
+        .sidebar.collapsed {
+            width: var(--sidebar-collapsed) !important;
+        }
+
+        /* Cabeçalho (logo + botão de toggle) flui normalmente com o restante do conteúdo — nada fixo/sticky aqui dentro. */
+        .sidebar-header {
+            background: transparent;
+        }
+        .sidebar.collapsed .sidebar-header { justify-content: center !important; }
+
         .sidebar .label, .sidebar .brand-label, .sidebar .user-info { transition: opacity .15s; white-space: nowrap; }
         .sidebar.collapsed .label, .sidebar.collapsed .brand-label, .sidebar.collapsed .user-info, .sidebar.collapsed .sidebar-logo-full { display: none !important; }
+
+        #sidebarToggle { flex-shrink: 0; }
+        #sidebarToggle i { transition: transform .25s ease; display: inline-block; }
+        .sidebar.collapsed #sidebarToggle i { transform: rotate(180deg); }
+
         .sidebar .nav-link { color: #c7c5dc; border-radius: .65rem; padding: .7rem .85rem; display: flex; gap: .8rem; align-items: center; }
         .sidebar .nav-link:hover, .sidebar .nav-link.active { color: white; background: rgba(255,255,255,.11); }
         .sidebar .nav-link i { font-size: 1.15rem; min-width: 1.3rem; text-align: center; }
-        
-        .main-content { flex: 1; min-width: 0; }
-        .card { border: 0; border-radius: 1rem; box-shadow: 0 .25rem 1.25rem rgba(25, 24, 52, .06); }
-        
-        /* Cores personalizadas para os botões principais (.btn-primary) */
-        .btn-primary { 
-            background: #004b46; 
-            border-color: #004b46; 
+
+        /* Estilização da barra de rolagem da sidebar */
+        .sidebar::-webkit-scrollbar { width: 5px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.3); border-radius: 4px; }
+        .sidebar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.5); }
+
+        /* Sidebar é fixed (fora do fluxo), então o conteúdo principal precisa da margem equivalente para não ficar por baixo dela. */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            min-width: 0;
+            max-width: 100%;
+            overflow-x: hidden;
+            transition: margin-left .25s ease;
         }
-        .btn-primary:hover, .btn-primary:focus, .btn-primary:active { 
-            background: #00665f !important; /* Um verde um pouco mais claro e elegante ao passar o mouse */
-            border-color: #005953 !important; 
+        body.sidebar-collapsed .main-content {
+            margin-left: var(--sidebar-collapsed);
+        }
+        .card { border: 0; border-radius: 1rem; box-shadow: 0 .25rem 1.25rem rgba(25, 24, 52, .06); }
+
+        /* Cores personalizadas para os botões principais (.btn-primary) */
+        .btn-primary {
+            background: #004b46;
+            border-color: #004b46;
+        }
+        .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+            background: #00665f !important;
+            border-color: #005953 !important;
         }
 
         .metric { font-size: 2rem; font-weight: 700; }
         .external-wrap { min-height: 100vh; display: grid; place-items: center; padding: 1.25rem; background: linear-gradient(135deg, #f4f1ff, #eef7ff); }
         .external-card { width: min(680px, 100%); }
-        @media (max-width: 767.98px) {
-            .sidebar { position: fixed; z-index: 1040; height: 100vh; transform: translateX(-100%); width: var(--sidebar-width) !important; }
-            .sidebar.mobile-open { transform: translateX(0); }
-            .sidebar .label, .sidebar .brand-label, .sidebar .user-info, .sidebar .sidebar-logo-full { display: initial !important; }
+
+        /* Em telas muito estreitas a sidebar expandida ocupa no máximo 85% da largura e o trilho recolhido fica mais compacto
+           (as variáveis controlam .sidebar e a margin-left de .main-content juntas, então nunca há sobreposição). */
+        @media (max-width: 575.98px) {
+            :root { --sidebar-width: 85vw; --sidebar-collapsed: 60px; }
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -52,9 +100,6 @@
     <div class="app-shell">
         {% include 'includes/sidebar.html' %}
         <main class="main-content p-3 p-md-4">
-            <button class="btn btn-light d-md-none mb-3" id="mobileSidebarToggle" type="button" aria-label="Abrir menu">
-                <i class="bi bi-list"></i>
-            </button>
             {% include 'includes/messages.html' %}
             {% block content %}{% endblock %}
         </main>
@@ -70,14 +115,41 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     const sidebar = document.getElementById('sidebar');
-    const desktopToggle = document.getElementById('sidebarToggle');
-    const mobileToggle = document.getElementById('mobileSidebarToggle');
-    if (sidebar && localStorage.getItem('enps-sidebar') === 'collapsed') sidebar.classList.add('collapsed');
-    desktopToggle?.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-        localStorage.setItem('enps-sidebar', sidebar.classList.contains('collapsed') ? 'collapsed' : 'expanded');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const AUTO_COLLAPSE_BREAKPOINT = 992; // abaixo disso, recolhe por padrão se o usuário não tiver escolhido um estado
+
+    function setCollapsed(collapsed) {
+        sidebar.classList.toggle('collapsed', collapsed);
+        document.body.classList.toggle('sidebar-collapsed', collapsed);
+        sidebarToggle?.setAttribute('aria-expanded', String(!collapsed));
+    }
+
+    function applyResponsiveSidebar() {
+        if (!sidebar) return;
+        const stored = localStorage.getItem('enps-sidebar');
+        if (stored) {
+            setCollapsed(stored === 'collapsed');
+        } else {
+            // Sem preferência salva: recolhe automaticamente em janelas/telas compactas (ex.: navegador redimensionado pela metade).
+            setCollapsed(window.innerWidth < AUTO_COLLAPSE_BREAKPOINT);
+        }
+    }
+
+    applyResponsiveSidebar();
+
+    sidebarToggle?.addEventListener('click', () => {
+        const collapsed = !sidebar.classList.contains('collapsed');
+        setCollapsed(collapsed);
+        localStorage.setItem('enps-sidebar', collapsed ? 'collapsed' : 'expanded');
     });
-    mobileToggle?.addEventListener('click', () => sidebar.classList.toggle('mobile-open'));
+
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        // Só reaplica o estado automático se o usuário ainda não escolheu um estado manualmente nesta sessão/navegador.
+        if (localStorage.getItem('enps-sidebar')) return;
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(applyResponsiveSidebar, 120);
+    });
 </script>
 {% block extra_js %}{% endblock %}
 </body>

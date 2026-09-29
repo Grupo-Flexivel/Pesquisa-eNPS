@@ -3,13 +3,14 @@ from django.urls import reverse
 from django.utils import timezone
 
 from pesquisas.models import Colaborador, Empresa, User
+from pesquisas.test_utils import criar_usuario
 
 from .models import Desligamento, DetalheRespostaDesligamento, FormularioDesligamento, PerguntaDesligamento
 
 
 class FluxoDesligamentoTests(TestCase):
     def setUp(self):
-        self.staff = User.objects.create_user(username='admin', password='senha-forte-123', is_staff=True)
+        self.staff = criar_usuario('admin', password='senha-forte-123', administrador=True)
         self.empresa = Empresa.objects.create(nome='Empresa Teste')
         self.colaborador = Colaborador.objects.create(
             nome='Fulano de Tal', documento='52998224725', empresa=self.empresa, ativo=True,

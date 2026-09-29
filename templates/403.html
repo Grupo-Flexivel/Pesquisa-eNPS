@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Acesso negado{% endblock %}
+
+{% block content %}
+<div class="card p-4" style="max-width: 600px;">
+    <h1 class="h4"><i class="bi bi-shield-lock me-2"></i>Acesso negado</h1>
+    <p class="text-secondary mb-3">Seu perfil não tem permissão para acessar esta área. Se precisar dela, solicite a liberação a um administrador.</p>
+    <div><a class="btn btn-primary" href="{% url 'pesquisas:dashboard' %}">Voltar ao início</a></div>
+</div>
+{% endblock %}
+
+{% block external_content %}
+<div class="card p-4">
+    <h1 class="h4">Acesso negado</h1>
+    <p class="text-secondary mb-3">Seu perfil não tem permissão para acessar esta área.</p>
+    <a class="btn btn-primary" href="{% url 'login' %}">Ir para o login</a>
+</div>
+{% endblock %}

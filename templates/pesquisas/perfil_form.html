@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}{% if perfil %}Editar{% else %}Novo{% endif %} perfil de acesso{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-4">{% if perfil %}Editar{% else %}Novo{% endif %} perfil de acesso</h1>
+
+<div class="card p-4 shadow-sm" style="max-width: 700px;">
+    <form method="post">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <!-- Campo Nome -->
+        <div class="mb-3">
+            {{ form.nome.label_tag }}
+            {{ form.nome }}
+            <div class="text-danger small">{{ form.nome.errors }}</div>
+        </div>
+
+        <!-- Módulos permitidos (Dropdown / Painel colapsável com barra de rolagem) -->
+        <div class="mb-3">
+            <label class="form-label d-block fw-bold">Módulos permitidos</label>
+            
+            <button class="btn btn-outline-secondary btn-sm mb-2 dropdown-toggle" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#painelModulos" aria-expanded="false" aria-controls="painelModulos">
+                Selecionar módulos de acesso
+            </button>
+
+            <!-- Painel colapsável com altura máxima e barra de rolagem vertical -->
+            <div class="collapse border rounded p-3 bg-white" id="painelModulos" style="max-height: 220px; overflow-y: auto;">
+                <div class="d-flex flex-column gap-2">
+                    {% for choice in form.modulos_permitidos %}
+                        <div class="form-check">
+                            {{ choice.tag }}
+                            <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                {{ choice.choice_label }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if form.modulos_permitidos.help_text %}
+                <div class="form-text">{{ form.modulos_permitidos.help_text }}</div>
+            {% endif %}
+            <div class="text-danger small">{{ form.modulos_permitidos.errors }}</div>
+        </div>
+
+        <!-- Campo Ativo -->
+        <div class="mb-3 form-check">
+            {{ form.ativo }} 
+            <label class="form-check-label" for="{{ form.ativo.id_for_label }}">Perfil Ativo</label>
+            <div class="text-danger small">{{ form.ativo.errors }}</div>
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Salvar</button>
+            <a class="btn btn-outline-secondary" href="{% url 'pesquisas:perfil_lista' %}">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

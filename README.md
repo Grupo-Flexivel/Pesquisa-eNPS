@@ -36,9 +36,21 @@ Ana Silva,52998224725,Filial São Paulo
 
 Importe com `python manage.py importar_colaboradores Colaboradores.csv`. Empresas são criadas automaticamente, sem duplicidade de nomes (inclusive com diferenças apenas entre maiúsculas e minúsculas). Registros existentes são atualizados, vinculados à empresa informada e reativados; qualquer linha inválida cancela toda a importação.
 
+## Banco de Talentos (currículos, IA e pgvector)
+
+**Perfis de acesso.** Cada usuário tem um perfil (`Administrador total`, `Gestor / RH geral` ou `Usuário específico` com lista de módulos). O Administrador define o perfil no cadastro de colaboradores ou em `/admin/`. Ver `pesquisas/permissoes.py`.
+
+**pgvector.** O banco precisa da extensão `vector`. No Docker, o serviço `db` usa a imagem `pgvector/pgvector:pg16` (mesma major do `postgres:16`, os dados existentes continuam válidos). A migration `talentos/0001` executa `CREATE EXTENSION IF NOT EXISTS vector`. Em banco gerenciado/sem superusuário, peça a um DBA `CREATE EXTENSION vector;` e valide com `python manage.py verificar_pgvector`.
+
+**Pipeline** (upload síncrono, até `CURRICULO_MAX_ARQUIVOS` PDFs por envio): `pypdf` extrai o texto → OpenAI GPT (`CURRICULO_LLM_MODEL`, saída estruturada por JSON Schema) extrai nome, contato, cidade/bairro, experiências e qualificações → GPT sugere o cargo mais compatível na árvore `organizacao` → embedding gravado em `vector(EMBEDDING_DIMENSIONS)`. Falhas ficam registradas no candidato e podem ser reprocessadas.
+
+**Variáveis** (ver `.env.example`): `OPENAI_API_KEY`; `EMBEDDING_API_URL`/`EMBEDDING_API_KEY`/`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` (alterar as dimensões exige nova migration e reprocessar os currículos).
+
+**Privacidade (LGPD).** Os PDFs ficam em `PRIVATE_MEDIA_ROOT` (fora de `/media/`, que o nginx serve) e só são entregues por view autenticada. O texto do currículo é enviado aos provedores de LLM/embeddings configurados: confirme base legal/contrato com eles. A exclusão do candidato remove também o PDF.
+
 ## Regras relevantes
 
-- Somente usuários autenticados com `is_staff=True` acessam o painel de gestão. O `/admin/` é apresentado na interface apenas a superusuários.
+- Somente usuários com acesso ao painel (`is_staff`, derivado do perfil) entram na gestão; cada módulo exige a permissão correspondente. O `/admin/` é restrito ao perfil Administrador.
 - Uma nova pesquisa exige pelo menos três perguntas e data inicial futura. A partir do início, o modelo, as views e o admin bloqueiam alterações.
 - O relatório usa a primeira pergunta `NOTA_0_10`, ordenada por `ordem`, como pergunta eNPS.
 - Como o cadastro solicitado possui apenas o estado atual `ativo`, o KPI de colaboradores ativos reflete o cadastro no momento da consulta do relatório.

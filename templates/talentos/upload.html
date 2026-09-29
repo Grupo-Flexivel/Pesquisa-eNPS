@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Enviar currículo{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1 class="h3 mb-0">Enviar currículo</h1>
+    <div class="text-secondary small">Banco de Talentos › Currículos</div>
+</div>
+
+<div class="card p-4" style="max-width: 720px;">
+    <form method="post" enctype="multipart/form-data" id="formUpload">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label class="form-label" for="id_curriculos">Arquivos PDF</label>
+            <input class="form-control" type="file" name="curriculos" id="id_curriculos"
+                   accept="application/pdf,.pdf" multiple required>
+            <div class="form-text">
+                Até {{ max_arquivos }} arquivos por envio, {{ max_mb }} MB cada. O PDF precisa conter texto
+                (currículos digitalizados como imagem não são suportados).
+            </div>
+        </div>
+        <div class="alert alert-light border small">
+            <i class="bi bi-shield-lock me-1"></i>
+            O conteúdo do currículo é enviado a serviços de IA para extração dos dados e busca por similaridade.
+            Envie apenas currículos de candidatos que consentiram com o tratamento de seus dados.
+        </div>
+        <button class="btn btn-primary" type="submit" id="btnEnviar">
+            <i class="bi bi-cloud-upload"></i> Enviar e processar
+        </button>
+        <a class="btn btn-light" href="{% url 'talentos:lista' %}">Cancelar</a>
+        <div class="text-secondary small mt-3 d-none" id="aguarde">
+            <span class="spinner-border spinner-border-sm me-1"></span>
+            Processando com IA — isso pode levar até 1 minuto por arquivo. Não feche a página.
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('formUpload').addEventListener('submit', function () {
+        document.getElementById('btnEnviar').disabled = true;
+        document.getElementById('aguarde').classList.remove('d-none');
+    });
+</script>
+{% endblock %}

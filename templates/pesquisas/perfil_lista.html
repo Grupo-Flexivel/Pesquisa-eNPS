@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Perfis de acesso{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">Perfis de acesso</h1>
+        <div class="text-secondary small">Módulo Geral</div>
+    </div>
+    <a class="btn btn-primary" href="{% url 'pesquisas:perfil_criar' %}">
+        <i class="bi bi-plus-circle"></i> Novo perfil
+    </a>
+</div>
+
+<div class="card p-4">
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Módulos permitidos</th>
+                    <th>Status</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for perfil in perfis %}
+                <tr>
+                    <td>{{ perfil.nome }}</td>
+                    <td>
+                        {% for modulo in perfil.modulos_permitidos %}
+                            <span class="badge text-bg-light border">{{ modulo }}</span>
+                        {% empty %}
+                            <span class="text-secondary small">Nenhum módulo selecionado</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if perfil.ativo %}
+                            <span class="badge text-bg-success">Ativo</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a class="btn btn-sm btn-outline-primary" href="{% url 'pesquisas:perfil_editar' perfil.pk %}" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="post" action="{% url 'pesquisas:perfil_status' perfil.pk %}">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-outline-secondary">{% if perfil.ativo %}Inativar{% else %}Ativar{% endif %}</button>
+                            </form>
+                            <form method="post" action="{% url 'pesquisas:perfil_excluir' perfil.pk %}"
+                                  onsubmit="return confirm('Excluir o perfil {{ perfil.nome|escapejs }}? Esta ação não pode ser desfeita.');">
+                                {% csrf_token %}
+                                {% if perfil.total_usuarios %}
+                                    <button class="btn btn-sm btn-outline-danger" type="button" disabled
+                                            title="{{ perfil.total_usuarios }} colaborador(es) usam este perfil. Inative em vez de excluir.">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+                                {% endif %}
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-secondary">Nenhum perfil de acesso cadastrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

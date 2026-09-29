@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}{{ candidato.nome_exibicao }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 mb-0">{{ candidato.nome_exibicao }}</h1>
+        <div class="text-secondary small">
+            Banco de Talentos › <a href="{% url 'talentos:lista' %}">Currículos</a> · Etapa: {{ candidato.get_status_display }}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary" href="{% url 'talentos:pdf' candidato.pk %}" target="_blank"><i class="bi bi-file-earmark-pdf"></i> Abrir PDF</a>
+        <form method="post" action="{% url 'talentos:reprocessar' candidato.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat"></i> Reprocessar</button>
+        </form>
+        <form method="post" action="{% url 'talentos:excluir' candidato.pk %}"
+              onsubmit="return confirm('Excluir definitivamente este candidato e o PDF? Esta ação não pode ser desfeita.');">
+            {% csrf_token %}
+            <button class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
+        </form>
+    </div>
+</div>
+
+{% if candidato.processamento == 'ERRO' %}
+<div class="alert alert-danger"><strong>O processamento falhou:</strong> {{ candidato.erro_processamento }}</div>
+{% endif %}
+
+{% if not candidato.ativo %}
+<div class="alert alert-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+        <strong><i class="bi bi-slash-circle"></i> Candidato inativo.</strong> Motivo: {{ candidato.motivo_inativacao }}
+        <div class="small text-secondary">
+            Inativado em {{ candidato.inativado_em|date:"d/m/Y H:i" }}
+            {% if candidato.inativado_por %} por {{ candidato.inativado_por.get_full_name|default:candidato.inativado_por.username }}{% endif %}
+        </div>
+    </div>
+    <form method="post" action="{% url 'talentos:reativar' candidato.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-outline-success btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Reativar</button>
+    </form>
+</div>
+{% else %}
+<div class="card p-3 mb-3">
+    <form method="post" action="{% url 'talentos:inativar' candidato.pk %}" class="d-flex flex-wrap align-items-end gap-2">
+        {% csrf_token %}
+        <div class="flex-grow-1">
+            <label class="form-label small mb-1">Motivo da inativação</label>
+            <textarea name="motivo_inativacao" class="form-control form-control-sm" rows="1" required></textarea>
+        </div>
+        <button class="btn btn-outline-warning btn-sm"><i class="bi bi-slash-circle"></i> Inativar candidato</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card p-4 mb-3">
+            <h2 class="h6 text-uppercase text-secondary">Dados e direcionamento</h2>
+            <form method="post">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                <div class="mb-3">
+                    {{ field.label_tag }} {{ field }}
+                    <div class="text-danger small">{{ field.errors }}</div>
+                </div>
+                {% endfor %}
+                {% if candidato.cargo_sugerido %}
+                <div class="alert alert-light border small">
+                    <i class="bi bi-stars me-1"></i><strong>Sugestão da IA:</strong>
+                    {{ candidato.cargo_sugerido.secao.departamento.nome }} › {{ candidato.cargo_sugerido.secao.nome }} › {{ candidato.cargo_sugerido.nome }}
+                    {% if candidato.justificativa_cargo %}<div class="mt-1 text-secondary">{{ candidato.justificativa_cargo }}</div>{% endif %}
+                    {% if candidato.cargo_id != candidato.cargo_sugerido_id %}
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-2"
+                                onclick="document.getElementById('id_cargo').value='{{ candidato.cargo_sugerido_id }}'">Usar sugestão</button>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <button class="btn btn-primary" type="submit">Salvar</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card p-4 mb-3">
+            <h2 class="h6 text-uppercase text-secondary">Resumo</h2>
+            <p class="mb-0">{{ candidato.resumo|default:"—" }}</p>
+        </div>
+        <div class="card p-4 mb-3">
+            <h2 class="h6 text-uppercase text-secondary">Experiências</h2>
+            {% for e in candidato.experiencias %}
+                <div class="mb-3">
+                    <div class="fw-semibold">{{ e.cargo }}{% if e.empresa %} · {{ e.empresa }}{% endif %}</div>
+                    <div class="small text-secondary">{{ e.periodo }}</div>
+                    <div class="small">{{ e.descricao }}</div>
+                </div>
+            {% empty %}<p class="text-secondary mb-0">—</p>{% endfor %}
+        </div>
+        <div class="card p-4 mb-3">
+            <h2 class="h6 text-uppercase text-secondary">Qualificações</h2>
+            {% for q in candidato.qualificacoes %}
+                <div class="small"><span class="badge text-bg-light border me-1">{{ q.tipo }}</span>{{ q.descricao }}</div>
+            {% empty %}<p class="text-secondary mb-0">—</p>{% endfor %}
+        </div>
+        <div class="card p-4">
+            <h2 class="h6 text-uppercase text-secondary mb-3">Linha do tempo</h2>
+            <ol class="list-unstyled mb-0">
+                {% for h in historico %}
+                <li class="d-flex gap-3 pb-3 {% if not forloop.last %}border-start ms-2 ps-3{% else %}ms-2 ps-3{% endif %}" style="position: relative;">
+                    <i class="bi {{ h.icone }} text-secondary" style="position: absolute; left: -.55rem; background: #fff;"></i>
+                    <div>
+                        <div class="fw-semibold small">{{ h.get_evento_display }}</div>
+                        {% if h.descricao %}<div class="small">{{ h.descricao }}</div>{% endif %}
+                        <div class="small text-secondary">
+                            {{ h.data_hora|date:"d/m/Y H:i" }} · {% if h.usuario_nome %}{{ h.usuario_nome }}{% else %}Sistema{% endif %}
+                        </div>
+                    </div>
+                </li>
+                {% empty %}
+                <li class="text-secondary small">Nenhum evento registrado.</li>
+                {% endfor %}
+            </ol>
+            {% if total_historico > limite_historico %}
+                <div class="small text-secondary">Exibindo os {{ limite_historico }} eventos mais recentes de {{ total_historico }}.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

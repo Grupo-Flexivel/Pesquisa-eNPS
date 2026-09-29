@@ -1,21 +1,18 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import user_passes_test
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, ProtectedError, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from desligamentos.models import FormularioDesligamento, RespostaDesligamento
 
-from .forms import ColaboradorForm, PerguntaFormSet, PesquisaForm, ResponderPerguntaForm, ValidarCPFForm
-from .models import Colaborador, DetalheResposta, Empresa, Pergunta, Pesquisa, RespostaPesquisa
+from .forms import ColaboradorForm, PerfilAcessoForm, PerguntaFormSet, PesquisaForm, ResponderPerguntaForm, ValidarCPFForm
+from .models import Colaborador, DetalheResposta, Empresa, PerfilAcesso, Pergunta, Pesquisa, RespostaPesquisa
+from .permissoes import DESLIGAMENTOS, ENPS, GERAL, administrador_required, modulo_required, pagina_inicial, usuario_tem_acesso
 from .services import gerar_hash_documento
-
-
-staff_required = user_passes_test(lambda user: user.is_authenticated and user.is_staff)
 
 
 def _formularios_desligamento_por_iniciativa():
@@ -52,8 +49,15 @@ def _status_pesquisa(pesquisa):
     return 'Em andamento'
 
 
-@staff_required
+@modulo_required()
 def dashboard(request):
+    # O dashboard reúne métricas de eNPS e desligamento; quem não tem esses módulos
+    # é encaminhado à primeira página a que tem direito.
+    if not usuario_tem_acesso(request.user, GERAL, ENPS, DESLIGAMENTOS):
+        destino = pagina_inicial(request.user)
+        if destino is None:
+            raise PermissionDenied
+        return redirect(destino)
     contexto = {
         'total_colaboradores': Colaborador.objects.filter(ativo=True).count(),
         'total_colaboradores_inativos': Colaborador.objects.filter(ativo=False).count(),
@@ -67,7 +71,7 @@ def dashboard(request):
     return render(request, 'pesquisas/dashboard.html', contexto)
 
 
-@staff_required
+@modulo_required(GERAL)
 def colaborador_lista(request):
     termo = request.GET.get('q', '').strip()
     empresa_id = request.GET.get('empresa', '').strip()
@@ -98,9 +102,9 @@ def colaborador_lista(request):
     })
 
 
-@staff_required
+@modulo_required(ENPS, DESLIGAMENTOS)
 def colaborador_criar(request):
-    form = ColaboradorForm(request.POST or None)
+    form = ColaboradorForm(request.POST or None, usuario_logado=request.user)
     if request.method == 'POST' and form.is_valid():
         colaborador = form.save()
         colaborador.data_ativacao = timezone.now()
@@ -110,13 +114,13 @@ def colaborador_criar(request):
     return render(request, 'pesquisas/colaborador_form.html', {'form': form})
 
 
-@staff_required
+@modulo_required(ENPS, DESLIGAMENTOS)
 def colaborador_editar(request, pk):
     from desligamentos.services import cancelar_desligamentos_abertos, registrar_desligamento_pendente
 
     colaborador = get_object_or_404(Colaborador, pk=pk)
     estava_ativo = colaborador.ativo
-    form = ColaboradorForm(request.POST or None, instance=colaborador)
+    form = ColaboradorForm(request.POST or None, instance=colaborador, usuario_logado=request.user)
     if request.method == 'POST' and form.is_valid():
         vai_inativar = estava_ativo and not form.cleaned_data['ativo']
         iniciativa = formulario = None
@@ -154,7 +158,7 @@ def colaborador_editar(request, pk):
     })
 
 
-@staff_required
+@modulo_required(ENPS, DESLIGAMENTOS)
 @require_POST
 def colaborador_alterar_status(request, pk):
     from desligamentos.services import cancelar_desligamentos_abertos, registrar_desligamento_pendente
@@ -185,7 +189,61 @@ def colaborador_alterar_status(request, pk):
 
     return redirect('pesquisas:colaborador_lista')
 
-@staff_required
+
+@modulo_required(GERAL)
+def perfil_lista(request):
+    perfis = PerfilAcesso.objects.annotate(total_usuarios=Count('usuarios'))
+    return render(request, 'pesquisas/perfil_lista.html', {'perfis': perfis})
+
+
+@modulo_required(GERAL)
+def perfil_criar(request):
+    form = PerfilAcessoForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, 'Perfil de acesso cadastrado com sucesso.')
+        return redirect('pesquisas:perfil_lista')
+    return render(request, 'pesquisas/perfil_form.html', {'form': form})
+
+
+@modulo_required(GERAL)
+def perfil_editar(request, pk):
+    perfil = get_object_or_404(PerfilAcesso, pk=pk)
+    form = PerfilAcessoForm(request.POST or None, instance=perfil)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, 'Perfil de acesso atualizado com sucesso.')
+        return redirect('pesquisas:perfil_lista')
+    return render(request, 'pesquisas/perfil_form.html', {'form': form, 'perfil': perfil})
+
+
+@modulo_required(GERAL)
+@require_POST
+def perfil_alterar_status(request, pk):
+    perfil = get_object_or_404(PerfilAcesso, pk=pk)
+    perfil.ativo = not perfil.ativo
+    perfil.save(update_fields=['ativo'])
+    situacao = 'ativado' if perfil.ativo else 'inativado'
+    messages.success(request, f'Perfil "{perfil.nome}" {situacao} com sucesso.')
+    return redirect('pesquisas:perfil_lista')
+
+
+@modulo_required(GERAL)
+@require_POST
+def perfil_excluir(request, pk):
+    perfil = get_object_or_404(PerfilAcesso, pk=pk)
+    try:
+        perfil.delete()
+        messages.success(request, 'Perfil de acesso excluído com sucesso.')
+    except ProtectedError:
+        messages.error(
+            request,
+            f'"{perfil.nome}" está vinculado a colaboradores e não pode ser excluído. Inative-o em vez disso.',
+        )
+    return redirect('pesquisas:perfil_lista')
+
+
+@modulo_required(ENPS)
 def pesquisa_lista(request):
     pesquisas = list(Pesquisa.objects.select_related('criado_por'))
     for pesquisa in pesquisas:
@@ -241,12 +299,12 @@ def _salvar_pesquisa(request, instance=None):
     })
 
 
-@staff_required
+@modulo_required(ENPS)
 def pesquisa_criar(request):
     return _salvar_pesquisa(request)
 
 
-@staff_required
+@modulo_required(ENPS)
 def pesquisa_editar(request, pk):
     pesquisa = get_object_or_404(Pesquisa, pk=pk)
     
@@ -256,7 +314,7 @@ def pesquisa_editar(request, pk):
     return _salvar_pesquisa(request, pesquisa)
 
 
-@staff_required
+@modulo_required(ENPS)
 @require_POST
 def pesquisa_excluir(request, pk):
     pesquisa = get_object_or_404(Pesquisa, pk=pk)
@@ -268,7 +326,7 @@ def pesquisa_excluir(request, pk):
     return redirect('pesquisas:pesquisa_lista')
 
 
-@staff_required
+@modulo_required(ENPS)
 def resultados(request, pk):
     pesquisa = get_object_or_404(Pesquisa, pk=pk)
     empresas = Empresa.objects.all()

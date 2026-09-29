@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'pesquisas',
     'desligamentos',
+    'organizacao',
+    'talentos',
 ]
 
 MIDDLEWARE = [
@@ -66,6 +68,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'pesquisas.context_processors.acesso_modulos',
             ],
         },
     },
@@ -76,16 +79,46 @@ ASGI_APPLICATION = 'enps.asgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': config('DB_ENGINE'),
         'NAME': config('DB_NAME'),
         'USER': config('DB_USER'),
         'PASSWORD': config('DB_PASSWORD'),
         'HOST': config('DB_HOST', default='localhost'),
         'PORT': config('DB_PORT', default='5432'),
         'CONN_MAX_AGE': config('DB_CONN_MAX_AGE', default=60, cast=int),
+    },
+    'vector_db': {
+        'ENGINE': config('VECTOR_DB_ENGINE'),
+        'NAME': config('VECTOR_DB_NAME'),
+        'USER': config('VECTOR_DB_USER'),
+        'PASSWORD': config('VECTOR_DB_PASSWORD'),
+        'HOST': config('VECTOR_DB_HOST', default='localhost'),
+        'PORT': config('VECTOR_DB_PORT', default='5433'),
+        'CONN_MAX_AGE': config('VECTOR_DB_CONN_MAX_AGE', default=60, cast=int),
     }
 }
 
+# Roteador para garantir que o app 'talentos' (que usa IA/pgvector) salve no banco de IA
+class VectorRouter:
+    def db_for_read(self, model, **hints):
+        if model._meta.app_label == 'talentos':
+            return 'vector_db'
+        return 'default'
+
+    def db_for_write(self, model, **hints):
+        if model._meta.app_label == 'talentos':
+            return 'vector_db'
+        return 'default'
+
+    def allow_relation(self, obj1, obj2, **hints):
+        return True
+
+    def allow_migrate(self, db, app_label, model_name=None, **hints):
+        if app_label == 'talentos':
+            return db == 'vector_db'
+        return db == 'default'
+
+DATABASE_ROUTERS = ['enps.settings.VectorRouter']
 
 AUTH_USER_MODEL = 'pesquisas.User'
 
@@ -138,6 +171,11 @@ LOGGING = {
         },
     },
     'loggers': {
+        'talentos': {
+            'handlers': ['auth_console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
         'pesquisas.auth': {
             'handlers': ['auth_console'],
             'level': 'INFO',
@@ -145,6 +183,45 @@ LOGGING = {
         },
     },
 }
+
+# --- Banco de Talentos ------------------------------------------------------
+# Currículos contêm dados pessoais: ficam FORA de MEDIA_ROOT (que o nginx serve em /media/)
+# e só são entregues por uma view autenticada.
+PRIVATE_MEDIA_ROOT = Path(config('PRIVATE_MEDIA_ROOT', default=str(BASE_DIR / 'private_media')))
+CURRICULO_MAX_MB = config('CURRICULO_MAX_MB', default=5, cast=int)
+CURRICULO_MAX_ARQUIVOS = config('CURRICULO_MAX_ARQUIVOS', default=60, cast=int)  # por envio (processamento é síncrono)
+CURRICULO_MAX_PAGINAS = config('CURRICULO_MAX_PAGINAS', default=30, cast=int)
+CURRICULO_MAX_CARACTERES = config('CURRICULO_MAX_CARACTERES', default=60000, cast=int)
+
+# LLM que interpreta o currículo e sugere o cargo (API da OpenAI).
+OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
+CURRICULO_LLM_MODEL = config('CURRICULO_LLM_MODEL', default='gpt-4o')
+
+# Embeddings: qualquer endpoint compatível com POST /v1/embeddings (OpenAI, Azure, Ollama, vLLM...).
+# Mudar EMBEDDING_DIMENSIONS exige nova migration.
+EMBEDDING_API_URL = config('EMBEDDING_API_URL')
+EMBEDDING_API_KEY = config('EMBEDDING_API_KEY')
+EMBEDDING_MODEL = config('EMBEDDING_MODEL', default='text-embedding-3-small')
+EMBEDDING_DIMENSIONS = config('EMBEDDING_DIMENSIONS', default=1536, cast=int)
+
+# Triagem automática por busca semântica: a IA SEMPRE escolhe o cargo mais próximo entre os
+# ativos (best match) — este número é só o "piso mínimo" de similaridade de cosseno (0 a 1)
+# para aceitar esse melhor candidato automaticamente. Abaixo disso, o currículo vai para a
+# etapa "Pendência" (inativo) até um analista definir o cargo manualmente. A intenção é falhar
+# só quando os textos forem realmente desconexos (ex.: currículo de Contador vs. cargos de TI)
+# — variações de nome/redação do MESMO tipo de cargo (ex.: "Desenvolvedor Java Pleno" vs.
+# "Desenvolvedor de Software Pleno") devem passar.
+#
+# CUIDADO ao subir este valor: modelos de embedding (ex.: text-embedding-3-small) raramente
+# dão 0.7+ de similaridade entre um currículo e um cargo, mesmo quando o match é excelente —
+# a comparação é entre um documento longo (currículo) e um texto curto (cargo), o que já
+# achata a pontuação por natureza. Um limiar "redondo" alto (0.7, 0.75) tende a rejeitar todos
+# os candidatos, mesmo os mais aderentes. 0.20 abaixo é um piso deliberadamente permissivo,
+# pensado para ser o "chão" (só barra o totalmente desconexo) — ainda assim, CALIBRE com dados
+# reais: `python manage.py inspecionar_similaridade_cargos --candidato <id>` mostra a
+# similaridade de cada cargo ativo para um candidato específico, e é o jeito certo de ajustar
+# este número — não um novo palpite.
+CURRICULO_MATCH_THRESHOLD = config('CURRICULO_MATCH_THRESHOLD', default=0.20, cast=float)
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'pesquisas:dashboard' 

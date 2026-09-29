@@ -1,21 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.forms import UserChangeForm, UserCreationForm
+from django.contrib.auth.forms import AdminUserCreationForm as DjangoAdminUserCreationForm, UserChangeForm
 from django import forms
 import logging
 
-from .models import Colaborador, DetalheResposta, Empresa, Pergunta, Pesquisa, RespostaPesquisa, User
+from .models import Colaborador, DetalheResposta, Empresa, PerfilAcesso, Pergunta, Pesquisa, RespostaPesquisa, User
 
 
 logger = logging.getLogger('pesquisas.auth')
 
 
-class AdminUserCreationForm(UserCreationForm):
+class AdminUserCreationForm(DjangoAdminUserCreationForm):
     auth_source = forms.ChoiceField(choices=User.AuthSource.choices, label='Origem da autenticação')
+    is_admin_total = forms.BooleanField(label='Administrador total', required=False, help_text='Designa acesso total de administrador ao painel.')
+    perfil_personalizado = forms.ModelChoiceField(
+        queryset=PerfilAcesso.objects.all(),
+        required=False,
+        label='Perfil de acesso personalizado',
+        help_text='Selecione um perfil customizado caso não seja administrador total.'
+    )
 
-    class Meta(UserCreationForm.Meta):
+    class Meta(DjangoAdminUserCreationForm.Meta):
         model = User
-        fields = ('username', 'auth_source')
+        fields = ('username', 'auth_source', 'is_admin_total', 'perfil_personalizado')
 
     def save(self, commit=True):
         user = super().save(commit=False)
@@ -28,6 +35,13 @@ class AdminUserCreationForm(UserCreationForm):
 
 class AdminUserChangeForm(UserChangeForm):
     auth_source = forms.ChoiceField(choices=User.AuthSource.choices, label='Origem da autenticação')
+    is_admin_total = forms.BooleanField(label='Administrador total', required=False, help_text='Designa acesso total de administrador ao painel.')
+    perfil_personalizado = forms.ModelChoiceField(
+        queryset=PerfilAcesso.objects.all(),
+        required=False,
+        label='Perfil de acesso personalizado',
+        help_text='Selecione um perfil customizado caso não seja administrador total.'
+    )
     local_password = forms.CharField(
         label='Nova senha local', required=False, strip=False,
         widget=forms.PasswordInput(render_value=False),
@@ -72,6 +86,12 @@ class AdminUserChangeForm(UserChangeForm):
         return user
 
 
+def _somente_administrador(request):
+    return request.user.is_active and request.user.is_admin_total
+
+
+# Módulo administrativo (Django admin / gestão de usuários): só o Administrador total.
+admin.site.has_permission = _somente_administrador
 admin.site.site_header = 'Administração eNPS'
 admin.site.site_title = 'eNPS'
 
@@ -80,13 +100,19 @@ admin.site.site_title = 'eNPS'
 class CustomUserAdmin(UserAdmin):
     add_form = AdminUserCreationForm
     form = AdminUserChangeForm
-    list_display = ('username', 'auth_source', 'directory_guid', 'is_staff', 'is_active')
-    list_filter = ('auth_source', 'is_staff', 'is_active')
+    list_display = ('username', 'is_admin_total', 'perfil_personalizado', 'auth_source', 'directory_guid', 'is_active')
+    list_filter = ('is_admin_total', 'perfil_personalizado', 'auth_source', 'is_active')
     readonly_fields = ('directory_guid',)
-    fieldsets = UserAdmin.fieldsets + (
+    
+    fieldsets = (
+        (None, {'fields': ('username', 'password')}),
+        ('Informações pessoais', {'fields': ('first_name', 'last_name', 'email')}),
+        ('Acesso aos módulos', {'fields': ('is_admin_total', 'perfil_personalizado', 'is_active')}),
+        ('Datas importantes', {'fields': ('last_login', 'date_joined')}),
         ('Autenticação corporativa', {'fields': ('auth_source', 'directory_guid', 'local_password')}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
+        ('Acesso aos módulos', {'fields': ('is_admin_total', 'perfil_personalizado')}),
         ('Autenticação corporativa', {'fields': ('auth_source',)}),
     )
     actions = ('relink_directory_identity',)
@@ -108,6 +134,12 @@ class CustomUserAdmin(UserAdmin):
         count = users.update(directory_guid=None)
         logger.info('admin=%s relink_directory_identity count=%s', request.user.username, count)
         self.message_user(request, f'{count} identidade(s) AD liberada(s) para novo vínculo.')
+
+
+@admin.register(PerfilAcesso)
+class PerfilAcessoAdmin(admin.ModelAdmin):
+    list_display = ('nome',)
+    search_fields = ('nome',)
 
 
 @admin.register(Colaborador)

@@ -28,6 +28,8 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path('', include('pesquisas.urls')),
     path('', include('desligamentos.urls')),
+    path('banco-de-talentos/organizacao/', include('organizacao.urls')),
+    path('banco-de-talentos/curriculos/', include('talentos.urls')),
 ]
 
 # Permite que o Django sirva arquivos estáticos corretamente durante o desenvolvimento (DEBUG=True)

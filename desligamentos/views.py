@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 
 from pesquisas.models import Colaborador
 from pesquisas.services import gerar_hash_documento
-from pesquisas.views import staff_required
+from pesquisas.permissoes import DESLIGAMENTOS, modulo_required
 
 from .forms import (
     FormularioDesligamentoForm, PerguntaDesligamentoFormSet, ResponderPerguntaDesligamentoForm,
@@ -18,7 +18,7 @@ from .models import (
 )
 
 
-@staff_required
+@modulo_required(DESLIGAMENTOS)
 def kanban(request):
     desligamentos = Desligamento.objects.select_related('colaborador', 'colaborador__empresa', 'formulario')
     contexto = {
@@ -29,7 +29,7 @@ def kanban(request):
     return render(request, 'desligamentos/kanban.html', contexto)
 
 
-@staff_required
+@modulo_required(DESLIGAMENTOS)
 @require_POST
 def desligamento_marcar_enviado(request, pk):
     desligamento = get_object_or_404(Desligamento, pk=pk, status=Desligamento.Status.PENDENTE)
@@ -40,7 +40,7 @@ def desligamento_marcar_enviado(request, pk):
     return redirect('desligamentos:kanban')
 
 
-@staff_required
+@modulo_required(DESLIGAMENTOS)
 def desligamento_respostas(request, pk):
     desligamento = get_object_or_404(
         Desligamento.objects.select_related('colaborador', 'colaborador__empresa', 'formulario'),
@@ -54,7 +54,7 @@ def desligamento_respostas(request, pk):
     })
 
 
-@staff_required
+@modulo_required(DESLIGAMENTOS)
 def formulario_lista(request):
     formularios = FormularioDesligamento.objects.select_related('criado_por')
     return render(request, 'desligamentos/formulario_lista.html', {'formularios': formularios})
@@ -93,18 +93,18 @@ def _salvar_formulario(request, instance=None):
     })
 
 
-@staff_required
+@modulo_required(DESLIGAMENTOS)
 def formulario_criar(request):
     return _salvar_formulario(request)
 
 
-@staff_required
+@modulo_required(DESLIGAMENTOS)
 def formulario_editar(request, pk):
     formulario = get_object_or_404(FormularioDesligamento, pk=pk)
     return _salvar_formulario(request, formulario)
 
 
-@staff_required
+@modulo_required(DESLIGAMENTOS)
 @require_POST
 def formulario_excluir(request, pk):
     formulario = get_object_or_404(FormularioDesligamento, pk=pk)

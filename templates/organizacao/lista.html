@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}{{ rotulo_plural }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0">{{ rotulo_plural }}</h1>
+        <div class="text-secondary small">Banco de Talentos › Estrutura organizacional</div>
+    </div>
+    <a class="btn btn-primary" href="{{ url_criar }}">
+        <i class="bi bi-plus-circle"></i> Nov{% if prefixo == 'secao' %}a{% else %}o{% endif %} {{ rotulo }}
+    </a>
+</div>
+
+<div class="card p-4">
+    <form class="row g-2 mb-3" method="get">
+        <div class="col-md-4">
+            <input class="form-control" name="q" value="{{ termo }}" placeholder="Buscar por nome">
+        </div>
+        {% for filtro in filtros %}
+        <div class="col-md-3">
+            <select name="{{ filtro.parametro }}" class="form-select">
+                <option value="">{% if filtro.parametro == 'departamento' %}Todos os departamentos{% else %}Todas as seções{% endif %}</option>
+                {% for opcao in filtro.opcoes %}
+                    <option value="{{ opcao.pk }}" {% if filtro.selecionado == opcao.pk|stringformat:"s" %}selected{% endif %}>{{ opcao }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endfor %}
+        <div class="col-md-2">
+            <select name="status" class="form-select">
+                <option value="">Todos os status</option>
+                <option value="ativo" {% if status_selecionado == 'ativo' %}selected{% endif %}>Ativos</option>
+                <option value="inativo" {% if status_selecionado == 'inativo' %}selected{% endif %}>Inativos</option>
+            </select>
+        </div>
+        <div class="col-md-2 d-grid">
+            <button class="btn btn-outline-secondary">Filtrar</button>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    {% if coluna_pai %}<th>{{ coluna_pai }}</th>{% endif %}
+                    <th>Status</th>
+                    <th class="text-end">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for objeto in objetos %}
+                <tr>
+                    <td>{{ objeto.nome }}</td>
+                    {% if coluna_pai %}<td>{{ objeto.pai }}</td>{% endif %}
+                    <td>
+                        {% if objeto.ativo %}
+                            <span class="badge text-bg-success">Ativo</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Inativo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a class="btn btn-sm btn-outline-primary" href="{% url nome_editar objeto.pk %}" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <form method="post" action="{% url nome_status objeto.pk %}">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-outline-secondary">{% if objeto.ativo %}Inativar{% else %}Ativar{% endif %}</button>
+                            </form>
+                            <form method="post" action="{% url nome_excluir objeto.pk %}"
+                                  onsubmit="return confirm('Excluir {{ objeto.nome|escapejs }}? Esta ação não pode ser desfeita.');">
+                                {% csrf_token %}
+                                {% if objeto.possui_dependencias %}
+                                    <button class="btn btn-sm btn-outline-danger" type="button" disabled
+                                            title="Possui registros vinculados. Inative em vez de excluir.">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                {% else %}
+                                    <button class="btn btn-sm btn-outline-danger" title="Excluir"><i class="bi bi-trash"></i></button>
+                                {% endif %}
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if coluna_pai %}4{% else %}3{% endif %}" class="text-center text-secondary">Nenhum registro encontrado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_paginated %}
+    <nav aria-label="Paginação">
+        <ul class="pagination justify-content-center mb-0">
+            {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Página {{ page_obj.number }} de {{ paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

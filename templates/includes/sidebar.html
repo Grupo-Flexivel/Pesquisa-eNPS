@@ -1,36 +1,46 @@
 {% load static %}
-<aside class="sidebar p-3 d-flex flex-column" id="sidebar" style="background-color: #004b46; height: 100vh; position: sticky; top: 0; overflow-x: hidden;">
-    <div class="d-flex align-items-center justify-content-between mb-3 flex-shrink-0">
+<aside class="sidebar p-3 d-flex flex-column" id="sidebar">
+    <div class="sidebar-header d-flex align-items-center justify-content-between mb-3 flex-shrink-0 pb-1">
         <a class="text-decoration-none d-flex align-items-center overflow-hidden" href="{% url 'pesquisas:dashboard' %}">
             <img src="{% static 'pesquisas/img/logo-grupo-flexivel.png' %}" alt="Logo" class="sidebar-logo-full" style="height: 32px; object-fit: contain;">
         </a>
-        <button class="btn btn-sm btn-outline-light d-none d-md-inline-flex" id="sidebarToggle" type="button" aria-label="Recolher ou expandir menu">
+        <button class="btn btn-sm btn-outline-light" id="sidebarToggle" type="button" aria-label="Recolher ou expandir menu" aria-controls="sidebar" aria-expanded="true">
             <i class="bi bi-chevron-left"></i>
         </button>
     </div>
     
-    <nav class="nav nav-pills flex-column gap-1 overflow-y-auto overflow-x-hidden flex-grow-1 pe-1">
+    <nav class="nav nav-pills flex-column gap-1 flex-grow-1">
         <!-- Módulo Geral -->
-        <div class="small text-white-50 px-2 pt-1 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo Geral</div>
-        
+        {% if acesso.geral%}
+            <div class="small text-white-50 px-2 pt-1 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo Geral</div>
+
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'pesquisas:dashboard' %}">
             <i class="bi bi-grid me-2"></i><span class="label">Dashboard / Relatórios</span>
         </a>
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'colaborador_lista' or request.resolver_match.url_name == 'colaborador_criar' %}active{% endif %}" href="{% url 'pesquisas:colaborador_lista' %}">
             <i class="bi bi-people me-2"></i><span class="label">Gerenciar colaboradores</span>
         </a>
+        {% if acesso.geral%}
+        <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'perfil_lista' or request.resolver_match.url_name == 'perfil_criar' or request.resolver_match.url_name == 'perfil_editar' %}active{% endif %}" href="{% url 'pesquisas:perfil_lista' %}">
+            <i class="bi bi-shield-lock me-2"></i><span class="label">Perfis de acesso</span>
+        </a>
+        {% endif %}
+        {% endif %}
 
         <!-- Módulo eNPS -->
+        {% if acesso.enps %}
         <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo eNPS</div>
-        
+
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'pesquisa_lista' %}active{% endif %}" href="{% url 'pesquisas:pesquisa_lista' %}">
             <i class="bi bi-ui-checks me-2"></i><span class="label">Gerenciar pesquisas</span>
         </a>
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'pesquisa_criar' %}active{% endif %}" href="{% url 'pesquisas:pesquisa_criar' %}">
             <i class="bi bi-plus-circle me-2"></i><span class="label">Cadastrar nova pesquisa</span>
         </a>
+        {% endif %}
 
         <!-- Módulo Desligamento -->
+        {% if acesso.desligamentos %}
         <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo Desligamento</div>
 
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'kanban' %}active{% endif %}" href="{% url 'desligamentos:kanban' %}">
@@ -39,11 +49,54 @@
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'formulario_lista' or request.resolver_match.url_name == 'formulario_criar' %}active{% endif %}" href="{% url 'desligamentos:formulario_lista' %}">
             <i class="bi bi-file-earmark-text me-2"></i><span class="label">Formulários de desligamento</span>
         </a>
+        {% endif %}
+
+        <!-- Módulo Banco de Talentos -->
+        {% if acesso.talentos %}
+        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Banco de Talentos</div>
+
+        {% with rota=request.resolver_match.url_name %}
+        {% if acesso.talentos_dashboard %}
+        <a class="nav-link text-white text-nowrap {% if rota == 'painel' %}active{% endif %}" href="{% url 'talentos:painel' %}">
+            <i class="bi bi-speedometer2 me-2"></i><span class="label">Dashboard de talentos</span>
+        </a>
+        {% endif %}
+        {% if acesso.talentos_kanban %}
+        <a class="nav-link text-white text-nowrap {% if rota == 'quadro' %}active{% endif %}" href="{% url 'talentos:quadro' %}">
+            <i class="bi bi-kanban me-2"></i><span class="label">Kanban de candidatos</span>
+        </a>
+        {% endif %}
+        {% if acesso.talentos_busca %}
+        <a class="nav-link text-white text-nowrap {% if rota == 'busca' %}active{% endif %}" href="{% url 'talentos:busca' %}">
+            <i class="bi bi-search-heart me-2"></i><span class="label">Busca semântica</span>
+        </a>
+        {% endif %}
+        {% if acesso.talentos_curriculos %}
+        <a class="nav-link text-white text-nowrap {% if rota == 'upload' %}active{% endif %}" href="{% url 'talentos:upload' %}">
+            <i class="bi bi-cloud-upload me-2"></i><span class="label">Enviar currículo</span>
+        </a>
+        <a class="nav-link text-white text-nowrap {% if rota == 'lista' or rota == 'detalhe' %}active{% endif %}" href="{% url 'talentos:lista' %}">
+            <i class="bi bi-file-earmark-person me-2"></i><span class="label">Currículos</span>
+        </a>
+        {% endif %}
+        {% if acesso.talentos_organizacao %}
+        <a class="nav-link text-white text-nowrap {% if rota == 'departamento_lista' or rota == 'departamento_criar' or rota == 'departamento_editar' %}active{% endif %}" href="{% url 'organizacao:departamento_lista' %}">
+            <i class="bi bi-diagram-3 me-2"></i><span class="label">Departamentos</span>
+        </a>
+        <a class="nav-link text-white text-nowrap {% if rota == 'secao_lista' or rota == 'secao_criar' or rota == 'secao_editar' %}active{% endif %}" href="{% url 'organizacao:secao_lista' %}">
+            <i class="bi bi-collection me-2"></i><span class="label">Seções</span>
+        </a>
+        <a class="nav-link text-white text-nowrap {% if rota == 'cargo_lista' or rota == 'cargo_criar' or rota == 'cargo_editar' %}active{% endif %}" href="{% url 'organizacao:cargo_lista' %}">
+            <i class="bi bi-person-badge me-2"></i><span class="label">Cargos</span>
+        </a>
+        {% endif %}
+        {% endwith %}
+        {% endif %}
     </nav>
 
     <!-- Módulo Administrativo e Rodapé -->
-    <div class="mt-auto pt-3 border-top border-secondary flex-shrink-0 overflow-hidden">
-        {% if user.is_superuser %}
+    <div class="pt-3 border-top border-secondary flex-shrink-0 overflow-hidden">
+        {% if acesso.administrativo %}
             <div class="small text-white-50 px-2 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo Administrativo</div>
             <a class="nav-link text-white text-nowrap mb-2" href="{% url 'admin:index' %}">
                 <i class="bi bi-gear me-2"></i><span class="label">Admin Django</span>
@@ -61,36 +114,8 @@
 </aside>
 
 <style>
-    /* Largura padrão expandida de 300px */
-    .sidebar {
-        width: 325px;
-        transition: width 0.3s ease;
-    }
-
-    /* Quando recolhida pelo JS */
-    .sidebar.collapsed {
-        width: 75px !important;
-    }
-
-    .sidebar.collapsed .sidebar-logo-full {
-        display: none !important;
-    }
-
-    .sidebar.collapsed .label,
-    .sidebar.collapsed .user-info,
+    /* Oculta os títulos de seção (Módulo Geral, eNPS, etc.) quando a sidebar está recolhida */
     .sidebar.collapsed .text-uppercase {
         display: none !important;
-    }
-    
-    /* Barra de rolagem vertical */
-    .sidebar nav::-webkit-scrollbar {
-        width: 4px;
-    }
-    .sidebar nav::-webkit-scrollbar-thumb {
-        background-color: rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
-    }
-    .sidebar nav {
-        overflow-x: hidden;
     }
 </style>

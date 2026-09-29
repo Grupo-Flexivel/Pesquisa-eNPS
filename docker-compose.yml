@@ -18,30 +18,32 @@ services:
       - .env
 
     depends_on:
-      db:
+      db_vector:
         condition: service_healthy
     restart: always
-
-
-  db:
-    image: postgres:16
-    container_name: pesquisa_enps_db
+    
+    # Container exclusivo para a IA / pgvector
+  db_vector:
+    image: pgvector/pgvector:pg16 
+    container_name: pesquisa_enps_db_vector
     volumes: 
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_vector_data:/var/lib/postgresql/data
     env_file:
       - .env
     environment:
-      POSTGRES_USER: $DB_USER
-      POSTGRES_PASSWORD: $DB_PASSWORD
-      POSTGRES_DB: $DB_NAME
+      POSTGRES_USER: ${VECTOR_DB_USER}
+      POSTGRES_PASSWORD: ${VECTOR_DB_PASSWORD}
+      POSTGRES_DB: ${VECTOR_DB_NAME}
+    ports:
+      - "5433:5432"  # Expõe na porta 5433 para não conflitar caso precise
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $DB_USER -d $DB_NAME"]
+      test: ["CMD-SHELL", "pg_isready -U ${VECTOR_DB_USER} -d ${VECTOR_DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
     restart: always
-    
+
   nginx:
     image: nginx:stable
     container_name: pesquisa_enps_nginx
@@ -57,6 +59,6 @@ services:
 
 
 volumes:
-  postgres_data:
+  postgres_vector_data:
   static_volume:
   media_volume:

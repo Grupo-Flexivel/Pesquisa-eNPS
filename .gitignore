@@ -15,6 +15,7 @@ db.sqlite3
 logs/
 staticfiles/
 media/
+private_media/
 
 # Ambientes virtuais
 .venv/

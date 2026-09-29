@@ -7,7 +7,8 @@ from django.test import RequestFactory, TestCase
 from .authentication import AuthenticationOutcome, AuthenticationService
 from .directory import DirectoryClient, DirectoryEntry, DirectoryResult, guid_from_raw
 from .forms import ColaboradorForm
-from .models import Empresa, User
+from .models import Empresa, PerfilAcesso, User
+from .test_utils import criar_usuario
 
 
 class HybridAuthenticationTests(TestCase):
@@ -118,14 +119,16 @@ class HybridAuthenticationTests(TestCase):
         user.refresh_from_db()
         self.assertEqual(user.failed_login_attempts, 1)
 
-    def test_superusuario_do_cadastro_eh_diretorio(self):
+    def test_usuario_do_cadastro_eh_diretorio(self):
         empresa = Empresa.objects.create(nome='Empresa AD')
-        form = ColaboradorForm(data={
+        admin = criar_usuario('admin.local', administrador=True)
+        perfil = PerfilAcesso.objects.create(nome='Gestor de RH', modulos_permitidos=['enps', 'desligamentos'])
+        form = ColaboradorForm(usuario_logado=admin, data={
             'nome': 'João Silva',
             'documento': '52998224725',
             'empresa': empresa.pk,
             'ativo': True,
-            'is_superuser': True,
+            'perfil': str(perfil.pk),
             'username': ' Joao.Silva ',
         })
 

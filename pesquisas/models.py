@@ -2,7 +2,7 @@ import re
 import uuid
 
 from django.conf import settings
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -27,7 +27,6 @@ def validar_cpf(cpf):
 
 def validar_cnpj(cnpj):
     if len(cnpj) != 14 or cnpj == cnpj[0] * 14:
-        
         raise ValidationError('Informe um CNPJ válido com 14 dígitos.')
     
     # Validação do primeiro dígito verificador
@@ -57,12 +56,57 @@ def validar_documento(valor):
         raise ValidationError('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.')
 
 
+class PerfilAcesso(models.Model):
+    """Perfis de acesso personalizados, cadastrados pelo administrador (ex.: "Gestor de RH")."""
+    nome = models.CharField(max_length=100, unique=True)
+    modulos_permitidos = models.JSONField(
+        'módulos permitidos', default=list, blank=True,
+        help_text='Chaves de módulo liberadas para este perfil (ver pesquisas/permissoes.py).',
+    )
+    ativo = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = 'perfil de acesso'
+        verbose_name_plural = 'perfis de acesso'
+        ordering = ('nome',)
+        constraints = [
+            models.UniqueConstraint(Lower('nome'), name='perfilacesso_nome_unico_case_insensitive'),
+        ]
+
+    def __str__(self):
+        return self.nome
+
+
+class UserManager(DjangoUserManager):
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
+        extra_fields.setdefault('is_admin_total', True)
+        return super().create_superuser(username, email, password, **extra_fields)
+
+
 class User(AbstractUser):
     """Usuário administrativo; colaboradores não precisam de login."""
 
     class AuthSource(models.TextChoices):
         LOCAL = 'LOCAL', 'Senha local'
         DIRECTORY = 'DIRECTORY', 'Active Directory'
+
+    objects = UserManager()
+
+    is_admin_total = models.BooleanField(
+        'administrador total', 
+        default=False, 
+        help_text='Indica se o usuário possui acesso total irrestrito ao sistema.'
+    )
+    perfil_personalizado = models.ForeignKey(
+        PerfilAcesso,
+        # PROTECT: um perfil em uso não pode ser excluído por engano (ver perfil_excluir), só inativado.
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name='perfil de acesso personalizado',
+        related_name='usuarios',
+        help_text='Perfil customizado que define os módulos permitidos para este usuário.'
+    )
 
     auth_source = models.CharField(
         max_length=10,
@@ -80,6 +124,18 @@ class User(AbstractUser):
 
     def save(self, *args, **kwargs):
         self.username = (self.username or '').strip().lower()
+        
+        # O administrador total tem permissões máximas
+        if self.is_admin_total:
+            self.is_superuser = True
+            self.is_staff = True
+            self.perfil_personalizado = None
+        else:
+            self.is_superuser = False
+            # É staff só se o perfil vinculado de fato libera algum módulo; um perfil vazio
+            # (ainda sem módulos marcados) não deve abrir a porta do painel para ninguém.
+            self.is_staff = bool(self.perfil_personalizado_id and self.perfil_personalizado.modulos_permitidos)
+
         super().save(*args, **kwargs)
 
     class Meta:

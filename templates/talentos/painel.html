@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard de talentos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 mb-0">Dashboard de talentos</h1>
+        <div class="text-secondary small">Banco de Talentos</div>
+    </div>
+    <div class="d-flex gap-2">
+        {% if acesso.talentos_curriculos %}<a class="btn btn-primary" href="{% url 'talentos:upload' %}"><i class="bi bi-cloud-upload"></i> Enviar currículo</a>{% endif %}
+        {% if acesso.talentos_busca %}<a class="btn btn-outline-secondary" href="{% url 'talentos:busca' %}"><i class="bi bi-search-heart"></i> Buscar talentos</a>{% endif %}
+    </div>
+</div>
+
+<!--KPI's-->
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-lg"><div class="card p-3"><div class="text-secondary small">Currículos no banco</div><div class="metric">{{ total }}</div></div></div>
+    <div class="col-6 col-md-4 col-lg"><div class="card p-3"><div class="text-secondary small">Em andamento</div><div class="metric">{{ em_andamento }}</div></div></div>
+    <div class="col-6 col-md-4 col-lg"><div class="card p-3"><div class="text-secondary small">Recebidos em 30 dias</div><div class="metric">{{ recebidos_30_dias }}</div></div></div>
+    <div class="col-6 col-md-4 col-lg"><div class="card p-3"><div class="text-secondary small">Contratados</div><div class="metric">{{ contratados }}</div></div></div>
+    <div class="col-6 col-md-4 col-lg">
+        <div class="card p-3">
+            <div class="text-secondary small">Inativos</div>
+            <div class="metric">{{ inativos }}</div>
+        </div>
+    </div>
+</div>
+
+{% if com_erro %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-exclamation-triangle me-1"></i>{{ com_erro }} currículo{{ com_erro|pluralize }} com erro de processamento.</span>
+    {% if acesso.talentos_curriculos %}<a class="btn btn-sm btn-outline-dark" href="{% url 'talentos:lista' %}?processamento=ERRO">Ver</a>{% endif %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card p-4 h-100">
+            <h2 class="h6 text-uppercase text-secondary mb-3">Funil por etapa</h2>
+            {% for etapa in funil %}
+            <div class="mb-2">
+                <div class="d-flex justify-content-between small"><span>{{ etapa.rotulo }}</span><span class="fw-semibold">{{ etapa.total }}</span></div>
+                <div class="progress" style="height: 8px;" role="progressbar" aria-label="{{ etapa.rotulo }}" aria-valuenow="{{ etapa.percentual }}" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar" style="width: {{ etapa.percentual }}%; background-color: #004b46;"></div>
+                </div>
+            </div>
+            {% endfor %}
+            {% if acesso.talentos_kanban %}<a class="small mt-2" href="{% url 'talentos:quadro' %}">Abrir Kanban →</a>{% endif %}
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card p-4 mb-3">
+            <h2 class="h6 text-uppercase text-secondary mb-3">Por departamento <span class="text-lowercase">(cargo definido ou sugerido)</span></h2>
+            {% for item in por_departamento %}
+            <div class="mb-2">
+                <div class="d-flex justify-content-between small"><span>{{ item.departamento|default:"Sem cargo definido" }}</span><span class="fw-semibold">{{ item.total }}</span></div>
+                <div class="progress" style="height: 8px;"><div class="progress-bar" style="width: {% widthratio item.total maximo_departamento 100 %}%; background-color: #004b46;"></div></div>
+            </div>
+            {% empty %}<p class="text-secondary mb-0">Sem dados ainda.</p>{% endfor %}
+        </div>
+        <div class="card p-4">
+            <h2 class="h6 text-uppercase text-secondary mb-3">Principais cidades</h2>
+            {% for item in por_cidade %}
+            <div class="mb-2">
+                <div class="d-flex justify-content-between small"><span>{{ item.cidade }}</span><span class="fw-semibold">{{ item.total }}</span></div>
+                <div class="progress" style="height: 8px;"><div class="progress-bar" style="width: {% widthratio item.total maximo_cidade 100 %}%; background-color: #004b46;"></div></div>
+            </div>
+            {% empty %}<p class="text-secondary mb-0">Sem dados ainda.</p>{% endfor %}
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card p-4">
+            <h2 class="h6 text-uppercase text-secondary mb-3">Atividade recente</h2>
+            {% for h in atividade %}
+            <div class="d-flex gap-2 small py-1">
+                <i class="bi {{ h.icone }} text-secondary"></i>
+                <div>
+                    <span class="fw-semibold">{{ h.get_evento_display }}</span>
+                    {% if acesso.talentos_curriculos %}· <a href="{% url 'talentos:detalhe' h.candidato_id %}">{{ h.candidato.nome_exibicao }}</a>{% endif %}
+                    {% if h.descricao %}<div class="text-secondary">{{ h.descricao }}</div>{% endif %}
+                    <div class="text-secondary">{{ h.data_hora|date:"d/m/Y H:i" }} · {% if h.usuario_nome %}{{ h.usuario_nome }}{% else %}Sistema{% endif %}</div>
+                </div>
+            </div>
+            {% empty %}<p class="text-secondary mb-0">Sem atividade registrada.</p>{% endfor %}
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card p-4">
+            <h2 class="h6 text-uppercase text-secondary mb-3">Últimos currículos</h2>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <tbody>
+                    {% for c in recentes %}
+                        <tr>
+                            <td><a class="text-decoration-none fw-semibold" href="{% url 'talentos:detalhe' c.pk %}">{{ c.nome_exibicao }}</a></td>
+                            <td>{{ c.cidade|default:"—" }}</td>
+                            <td>{{ c.cargo_sugerido.nome|default:"—" }}</td>
+                            <td><span class="badge text-bg-light border">{{ c.get_status_display }}</span></td>
+                            <td class="text-secondary small">{{ c.criado_em|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td class="text-secondary">Nenhum currículo enviado ainda.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

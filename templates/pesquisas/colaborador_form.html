@@ -12,20 +12,22 @@
         
         {% for field in form %}
             {% if field.name == 'username' %}
-                <!-- Campo de username condicional (oculto por padrão se não for superusuário) -->
-                <div class="mb-3" id="div_id_username" style="display: none;">
+                <!-- Login: exibido apenas quando um perfil de acesso é escolhido -->
+                <div class="mb-3" id="div_id_{{ field.name }}" style="display: none;">
                     {{ field.label_tag }}
                     {{ field }}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                     <div class="text-danger small">{{ field.errors }}</div>
                 </div>
             {% else %}
-                <div class="mb-3 {% if field.name == 'ativo' or field.name == 'is_superuser' %}form-check{% endif %}">
-                    {% if field.name == 'ativo' or field.name == 'is_superuser' %}
+                <div class="mb-3 {% if field.name == 'ativo' %}form-check{% endif %}">
+                    {% if field.name == 'ativo' %}
                         {{ field }} {{ field.label_tag }}
                     {% else %}
                         {{ field.label_tag }}
                         {{ field }}
                     {% endif %}
+                    {% if field.name == 'perfil' and field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                     <div class="text-danger small">{{ field.errors }}</div>
                 </div>
             {% endif %}
@@ -81,25 +83,16 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const checkboxSuper = document.getElementById('id_is_superuser');
+        const selectPerfil = document.getElementById('id_perfil');
         const divUsername = document.getElementById('div_id_username');
-        const inputUsername = document.getElementById('id_username');
 
-        if (checkboxSuper && divUsername) {
-            function toggleUsername() {
-                if (checkboxSuper.checked) {
-                    divUsername.style.display = 'block';
-                } else {
-                    divUsername.style.display = 'none';
-                    if (inputUsername) inputUsername.value = ''; // Limpa o campo se desmarcar
-                }
+        // Exibe o campo de login sempre que um perfil de acesso for escolhido (diferente de vazio)
+        if (selectPerfil && divUsername) {
+            function atualizarCamposAcesso() {
+                divUsername.style.display = selectPerfil.value !== '' ? 'block' : 'none';
             }
-
-            // Executa ao carregar a página (útil em caso de erro de validação com o checkbox marcado)
-            toggleUsername();
-
-            // Executa ao alterar o checkbox
-            checkboxSuper.addEventListener('change', toggleUsername);
+            atualizarCamposAcesso();
+            selectPerfil.addEventListener('change', atualizarCamposAcesso);
         }
 
         const form = document.querySelector('form[method="post"]');

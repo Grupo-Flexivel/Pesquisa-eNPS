@@ -3,3 +3,6 @@ psycopg[binary]>=3.1.8
 python-decouple==3.8
 gunicorn==23.0.0
 ldap3>=2.9,<3
+pgvector>=0.4,<1
+pypdf>=5,<7
+openai>=1.0,<2

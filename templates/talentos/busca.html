@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Busca semântica{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h1 class="h3 mb-0">Busca semântica</h1>
+    <div class="text-secondary small">Descreva o perfil em linguagem natural; a busca considera o significado, não só palavras exatas.</div>
+</div>
+
+<div class="card p-4 mb-3">
+    <form method="get" class="row g-3">
+        <div class="col-12">
+            {{ form.q.label_tag }} {{ form.q }}
+            <div class="text-danger small">{{ form.q.errors }}</div>
+        </div>
+        <div class="col-md-3">{{ form.cidade.label_tag }} {{ form.cidade }}</div>
+        <div class="col-md-3">{{ form.bairro.label_tag }} {{ form.bairro }}</div>
+        <div class="col-md-3">{{ form.departamento.label_tag }} {{ form.departamento }}</div>
+        <div class="col-md-3">{{ form.secao.label_tag }} {{ form.secao }}</div>
+        <div class="col-md-6">{{ form.cargo.label_tag }} {{ form.cargo }}</div>
+        <div class="col-md-3">{{ form.status.label_tag }} {{ form.status }}</div>
+        <div class="col-md-3">{{ form.situacao.label_tag }} {{ form.situacao }}</div>
+        <div class="col-md-3 d-flex align-items-end gap-2">
+            <button class="btn btn-primary flex-grow-1" type="submit"><i class="bi bi-search"></i> Buscar</button>
+            <a class="btn btn-light" href="{% url 'talentos:busca' %}">Limpar</a>
+        </div>
+    </form>
+</div>
+
+{% if erro %}<div class="alert alert-danger">{{ erro }}</div>{% endif %}
+
+{% if resultados is not None %}
+<div class="card p-4">
+    <h2 class="h6 text-uppercase text-secondary mb-3">{{ resultados|length }} resultado{{ resultados|length|pluralize }}{% if com_texto %} · ordenados por similaridade{% endif %}</h2>
+    {% for c in resultados %}
+    <div class="d-flex justify-content-between align-items-start gap-3 py-3 {% if not forloop.last %}border-bottom{% endif %}">
+        <div>
+            <a class="text-decoration-none fw-semibold" href="{% url 'talentos:detalhe' c.pk %}">{{ c.nome_exibicao }}</a>
+            <span class="badge text-bg-light border ms-1">{{ c.get_status_display }}</span>
+            {% if not c.ativo %}<span class="badge text-bg-secondary ms-1">Inativo</span>{% endif %}
+            <div class="small text-secondary">
+                {% if c.cidade %}{{ c.cidade }}{% if c.bairro %} · {{ c.bairro }}{% endif %}{% endif %}
+                
+                <!-- Exibição limpa e estruturada por partes usando os relacionamentos separados -->
+                {% with cargo=c.cargo|default:c.cargo_sugerido %}
+                    {% if cargo %} 
+                        · <span class="text-dark">{{ cargo.secao.departamento.nome }}</span> 
+                        › <span class="text-dark">{{ cargo.secao.nome }}</span> 
+                        › <span class="fw-medium text-dark">{{ cargo.nome }}</span>
+                    {% endif %}
+                {% endwith %}
+            </div>
+            <div class="small mt-1">{{ c.resumo|truncatechars:220 }}</div>
+        </div>
+        <div class="text-end flex-shrink-0">
+            {% if com_texto %}<div class="fw-semibold" title="Similaridade semântica com a busca">{{ c.similaridade }}%</div>{% endif %}
+            <a class="btn btn-sm btn-outline-primary mt-1" href="{% url 'talentos:pdf' c.pk %}" target="_blank" title="Abrir PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+        </div>
+    </div>
+    {% empty %}
+    <p class="text-secondary mb-0">Nenhum candidato encontrado com esses critérios.</p>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

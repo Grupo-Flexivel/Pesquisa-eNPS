@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from .models import Colaborador, DetalheResposta, Empresa, Pergunta, Pesquisa, RespostaPesquisa, User, validar_documento
 from .services import gerar_hash_documento
+from .test_utils import criar_usuario
 
 
 DOCUMENTO_VALIDO = '52998224725'  # Pode ser CPF ou CNPJ válido
@@ -20,7 +21,7 @@ DOCUMENTO_VALIDO = '52998224725'  # Pode ser CPF ou CNPJ válido
 @override_settings(SECRET_SALT='segredo-de-teste')
 class DominioTests(TestCase):
     def setUp(self):
-        self.staff = User.objects.create_user('gestor', password='senha', is_staff=True)
+        self.staff = criar_usuario('gestor', password='senha', administrador=True)
         self.empresa = Empresa.objects.create(nome='Matriz')
 
     def pesquisa(self, inicio=None):
@@ -58,7 +59,7 @@ class DominioTests(TestCase):
 @override_settings(SECRET_SALT='segredo-de-teste')
 class FluxoExternoTests(TestCase):
     def setUp(self):
-        self.staff = User.objects.create_user('gestor', password='senha', is_staff=True)
+        self.staff = criar_usuario('gestor', password='senha', administrador=True)
         self.empresa = Empresa.objects.create(nome='Matriz')
         self.colaborador = Colaborador.objects.create(nome='Ana', documento=DOCUMENTO_VALIDO, empresa=self.empresa)
         agora = timezone.now()

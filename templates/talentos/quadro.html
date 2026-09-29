@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}Kanban de candidatos{% endblock %}
+
+{% block extra_css %}
+<style>
+    .kanban-board { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; align-items: flex-start; }
+    .kanban-col { flex: 0 0 290px; background: #eceef4; border-radius: 1rem; display: flex; flex-direction: column; max-height: calc(100vh - 210px); }
+    .kanban-col-head { padding: .8rem 1rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+    .kanban-col-body { padding: 0 .6rem .6rem; overflow-y: auto; min-height: 90px; flex: 1; }
+    .kanban-col-body.drag-over { background: rgba(0, 75, 70, .10); border-radius: .75rem; }
+    .kanban-card { background: #fff; border-radius: .75rem; padding: .7rem .8rem; margin-bottom: .55rem; box-shadow: 0 .1rem .5rem rgba(25, 24, 52, .08); cursor: grab; }
+    .kanban-card.dragging { opacity: .45; }
+    .kanban-card.salvando { opacity: .6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 mb-0">Kanban de candidatos</h1>
+        <div class="text-secondary small">Arraste os cartões entre as etapas (ou use o seletor do cartão).</div>
+    </div>
+    <form method="get" class="d-flex gap-2">
+        <input class="form-control" name="q" value="{{ termo }}" placeholder="Filtrar por nome ou cidade">
+        <button class="btn btn-outline-secondary">Filtrar</button>
+    </form>
+</div>
+
+{% csrf_token %}
+<div class="kanban-board" id="quadro" data-url-mover="{% url 'talentos:mover' 0 %}">
+    {% for coluna in colunas %}
+    <section class="kanban-col" aria-label="{{ coluna.rotulo }}">
+        <div class="kanban-col-head">
+            <span>{{ coluna.rotulo }}</span>
+            <span class="badge text-bg-secondary" data-contador="{{ coluna.valor }}">{{ coluna.total }}</span>
+        </div>
+        <div class="kanban-col-body" data-status="{{ coluna.valor }}">
+            {% for c in coluna.cartoes %}
+            <article class="kanban-card" draggable="{{ c.ativo|yesno:'true,false' }}" data-id="{{ c.pk }}">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                    <a class="fw-semibold text-decoration-none" href="{% url 'talentos:detalhe' c.pk %}" draggable="false">{{ c.nome_exibicao }}</a>
+                    {% if acesso.talentos_curriculos %}
+                    <a class="text-secondary" href="{% url 'talentos:pdf' c.pk %}" target="_blank" title="Abrir PDF" draggable="false"><i class="bi bi-file-earmark-pdf"></i></a>
+                    {% endif %}
+                </div>
+                {% with cargo=c.cargo|default:c.cargo_sugerido %}
+                    {% if cargo %}<div class="small text-secondary">{{ cargo.nome }} · {{ cargo.secao.departamento.nome }}</div>{% endif %}
+                {% endwith %}
+                <div class="small text-secondary">
+                    {% if c.cidade %}<i class="bi bi-geo-alt"></i> {{ c.cidade }}{% if c.bairro %} · {{ c.bairro }}{% endif %}{% endif %}
+                    {% if c.email %}<div class="text-truncate"><i class="bi bi-envelope"></i> {{ c.email }}</div>{% endif %}
+                    {% if c.telefone %}<div><i class="bi bi-telephone"></i> {{ c.telefone }}</div>{% endif %}
+                </div>
+                {% if c.processamento == 'ERRO' %}<span class="badge text-bg-danger mt-1">Erro no processamento</span>{% endif %}
+                {% if not c.ativo %}<span class="badge text-bg-secondary mt-1" title="Defina um cargo na tela de detalhe para aprovar e mover.">Inativo · aguardando aprovação</span>{% endif %}
+                <select class="form-select form-select-sm mt-2 mover-select" aria-label="Mover {{ c.nome_exibicao }} para a etapa" {% if not c.ativo %}disabled title="Defina um cargo na tela de detalhe para aprovar e mover."{% endif %}>
+                    {% for valor, rotulo in etapas %}<option value="{{ valor }}" {% if valor == c.status %}selected{% endif %}>{{ rotulo }}</option>{% endfor %}
+                </select>
+            </article>
+            {% endfor %}
+            {% if coluna.total > limite %}
+                <div class="small text-secondary text-center py-1">Exibindo {{ limite }} de {{ coluna.total }}. Use o filtro para refinar.</div>
+            {% endif %}
+        </div>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const quadro = document.getElementById('quadro');
+    const token = document.querySelector('input[name=csrfmiddlewaretoken]').value;  // cookie CSRF é HttpOnly
+    let arrastado = null;
+
+    function atualizarContadores(contagens) {
+        document.querySelectorAll('[data-contador]').forEach(el => {
+            el.textContent = contagens[el.dataset.contador] || 0;
+        });
+    }
+
+    async function mover(cartao, corpoDestino) {
+        const origem = {pai: cartao.parentElement, proximo: cartao.nextElementSibling};
+        const novoStatus = corpoDestino.dataset.status;
+        corpoDestino.prepend(cartao);
+        cartao.querySelector('.mover-select').value = novoStatus;
+        cartao.classList.add('salvando');
+        try {
+            const resposta = await fetch(quadro.dataset.urlMover.replace('/0/', '/' + cartao.dataset.id + '/'), {
+                method: 'POST',
+                headers: {'X-CSRFToken': token, 'X-Requested-With': 'XMLHttpRequest'},
+                body: new URLSearchParams({status: novoStatus}),
+                credentials: 'same-origin',
+            });
+            if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+            atualizarContadores((await resposta.json()).contagens);
+        } catch (erro) {
+            origem.pai.insertBefore(cartao, origem.proximo);  // desfaz a movimentação visual
+            cartao.querySelector('.mover-select').value = origem.pai.dataset.status;
+            alert('Não foi possível mover o candidato. Verifique sua conexão/permissão e tente novamente.');
+        } finally {
+            cartao.classList.remove('salvando');
+        }
+    }
+
+    quadro.addEventListener('dragstart', e => {
+        const cartao = e.target.closest('.kanban-card');
+        if (!cartao) return;
+        arrastado = cartao;
+        cartao.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', cartao.dataset.id);
+    });
+    quadro.addEventListener('dragend', () => {
+        if (arrastado) arrastado.classList.remove('dragging');
+        arrastado = null;
+        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+    quadro.addEventListener('dragover', e => {
+        const corpo = e.target.closest('.kanban-col-body');
+        if (!corpo || !arrastado) return;
+        e.preventDefault();
+        corpo.classList.add('drag-over');
+    });
+    quadro.addEventListener('dragleave', e => {
+        const corpo = e.target.closest('.kanban-col-body');
+        if (corpo && !corpo.contains(e.relatedTarget)) corpo.classList.remove('drag-over');
+    });
+    quadro.addEventListener('drop', e => {
+        const corpo = e.target.closest('.kanban-col-body');
+        if (!corpo || !arrastado) return;
+        e.preventDefault();
+        corpo.classList.remove('drag-over');
+        if (arrastado.parentElement !== corpo) mover(arrastado, corpo);
+    });
+
+    // Alternativa acessível (teclado/toque): seletor no próprio cartão.
+    quadro.addEventListener('change', e => {
+        if (!e.target.classList.contains('mover-select')) return;
+        const cartao = e.target.closest('.kanban-card');
+        const destino = quadro.querySelector('.kanban-col-body[data-status="' + e.target.value + '"]');
+        if (destino && cartao.parentElement !== destino) mover(cartao, destino);
+    });
+})();
+</script>
+{% endblock %}
