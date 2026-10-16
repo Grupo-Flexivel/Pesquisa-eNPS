@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     'organizacao',
     'talentos',
     'vagas',
+    'notificacoes',
+    'experiencia',
 ]
 
 MIDDLEWARE = [
@@ -54,6 +56,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'experiencia.middleware.AtualizacaoExperienciaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -70,6 +73,8 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'pesquisas.context_processors.acesso_modulos',
+                'notificacoes.context_processors.notificacoes',
+                'experiencia.context_processors.gestor_experiencia',
             ],
         },
     },

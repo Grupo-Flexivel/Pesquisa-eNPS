@@ -8,3 +8,5 @@ pypdf>=5,<7
 openai>=1.0,<2
 qrcode>=7,<8
 Pillow>=10,<12
+nh3>=0.2.17,<1
+openpyxl>=3.1,<4

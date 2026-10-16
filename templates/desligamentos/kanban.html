@@ -30,9 +30,9 @@
     <div class="kanban-col">
         <h2 class="mb-3">Pendentes <span class="badge text-bg-secondary">{{ pendentes|length }}</span></h2>
         {% for d in pendentes %}
-            <div class="kanban-card">
+            <div class="kanban-card" id="desligamento-{{ d.pk }}">
                 <div class="fw-semibold">{{ d.colaborador.nome }}</div>
-                <div class="small text-secondary mb-2">{{ d.colaborador.empresa.nome }}</div>
+                <div class="small text-secondary mb-2">{{ d.colaborador.nomes_empresas }}</div>
                 <span class="badge {% if d.iniciativa == 'EMPRESA' %}text-bg-info{% else %}text-bg-warning{% endif %} mb-2">
                     {{ d.get_iniciativa_display }}
                 </span>
@@ -55,7 +55,7 @@
         {% for d in aguardando %}
             <div class="kanban-card">
                 <div class="fw-semibold">{{ d.colaborador.nome }}</div>
-                <div class="small text-secondary mb-2">{{ d.colaborador.empresa.nome }}</div>
+                <div class="small text-secondary mb-2">{{ d.colaborador.nomes_empresas }}</div>
                 <span class="badge {% if d.iniciativa == 'EMPRESA' %}text-bg-info{% else %}text-bg-warning{% endif %} mb-2">
                     {{ d.get_iniciativa_display }}
                 </span>
@@ -78,7 +78,7 @@
         {% for d in respondidos %}
             <div class="kanban-card">
                 <div class="fw-semibold">{{ d.colaborador.nome }}</div>
-                <div class="small text-secondary mb-2">{{ d.colaborador.empresa.nome }}</div>
+                <div class="small text-secondary mb-2">{{ d.colaborador.nomes_empresas }}</div>
                 <span class="badge {% if d.iniciativa == 'EMPRESA' %}text-bg-info{% else %}text-bg-warning{% endif %} mb-2">
                     {{ d.get_iniciativa_display }}
                 </span>

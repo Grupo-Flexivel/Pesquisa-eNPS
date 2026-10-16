@@ -13,7 +13,7 @@ class FluxoVagaTests(TestCase):
         self.staff = criar_usuario('admin', password='senha-forte-123', administrador=True)
         self.empresa = Empresa.objects.create(nome='Empresa Teste')
         self.colaborador = Colaborador.objects.create(
-            nome='Fulano de Tal', documento='52998224725', empresa=self.empresa, ativo=True,
+            nome='Fulano de Tal', documento='52998224725', empresas=[self.empresa], ativo=True,
         )
         agora = timezone.now()
         self.vaga = Vaga.objects.create(

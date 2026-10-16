@@ -73,7 +73,7 @@ def vaga_editar(request, pk):
 @modulo_required(VAGAS)
 def vaga_detalhe(request, pk):
     vaga = get_object_or_404(Vaga.objects.select_related('criado_por'), pk=pk)
-    candidaturas = vaga.candidaturas.select_related('colaborador', 'colaborador__empresa')
+    candidaturas = vaga.candidaturas.select_related('colaborador').prefetch_related('colaborador__empresas')
     return render(request, 'vagas/vaga_detalhe.html', {'vaga': vaga, 'candidaturas': candidaturas})
 
 
@@ -103,7 +103,7 @@ def vaga_qrcode(request, pk):
 @modulo_required(VAGAS)
 def candidatura_respostas(request, pk):
     candidatura = get_object_or_404(
-        Candidatura.objects.select_related('colaborador', 'colaborador__empresa', 'vaga'), pk=pk,
+        Candidatura.objects.select_related('colaborador', 'vaga'), pk=pk,
     )
     detalhes = DetalheRespostaCandidatura.objects.filter(
         candidatura=candidatura,
@@ -124,8 +124,8 @@ def _vaga_sem_perguntas(vaga):
 
 def _mensagem_status(vaga):
     """Aviso exibido na tela de CPF quando a vaga não está aberta a candidaturas."""
-    if _vaga_sem_perguntas(vaga):
-        return 'Esta vaga não está disponível no momento.'
+    #if _vaga_sem_perguntas(vaga):
+       #return 'Esta vaga não está disponível no momento.'
     if vaga.status == Vaga.Status.AGENDADA:
         data = timezone.localtime(vaga.data_abertura).strftime('%d/%m/%Y às %H:%M')
         return f'As candidaturas para esta vaga ainda não começaram. Elas se iniciam em {data}.'

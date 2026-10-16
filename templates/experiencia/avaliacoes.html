@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Gerenciar avaliações · experiência{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+    <div>
+        <h1 class="h3 mb-1">Gerenciar avaliações</h1>
+        <p class="text-secondary mb-0">Formulários de avaliação de experiência e acompanhamento das respostas dos gestores.</p>
+    </div>
+    <a class="btn btn-primary" href="{% url 'experiencia:formulario_criar' %}"><i class="bi bi-plus-lg"></i> Novo formulário</a>
+</div>
+
+<div class="card p-4 mb-4">
+    <h2 class="h5 mb-3">Formulários de avaliação</h2>
+    {% if formularios %}
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr><th>Título</th><th>Perguntas</th><th>Atualizado em</th><th class="text-end">Ações</th></tr>
+            </thead>
+            <tbody>
+                {% for f in formularios %}
+                <tr>
+                    <td class="fw-semibold">
+                        {{ f.titulo }}
+                        {% if f.padrao %}<span class="badge text-bg-success ms-1">Padrão</span>{% endif %}
+                    </td>
+                    <td>{{ f.perguntas.all|length }}</td>
+                    <td>{{ f.atualizado_em|date:'d/m/Y H:i' }}</td>
+                    <td class="text-end text-nowrap">
+                        {% if not f.padrao %}
+                        <form method="post" action="{% url 'experiencia:formulario_definir_padrao' f.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button class="btn btn-sm btn-outline-success" type="submit" title="Usar nas novas avaliações">
+                                <i class="bi bi-star"></i> Tornar padrão
+                            </button>
+                        </form>
+                        {% endif %}
+                        <a class="btn btn-sm btn-primary" href="{% url 'experiencia:formulario_editar' f.pk %}" title="Editar"><i class="bi bi-pencil"></i></a>
+                        {% if not f.padrao %}
+                        <form method="post" action="{% url 'experiencia:formulario_excluir' f.pk %}" class="d-inline"
+                              onsubmit="return confirm('Excluir o formulário &quot;{{ f.titulo|escapejs }}&quot;? As avaliações já respondidas são preservadas.');">
+                            {% csrf_token %}
+                            <button class="btn btn-sm btn-danger" type="submit" title="Excluir"><i class="bi bi-trash"></i></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="alert alert-warning mb-0">
+            Nenhum formulário cadastrado: os gestores não conseguem responder as avaliações.
+            <a class="alert-link" href="{% url 'experiencia:formulario_criar' %}">Cadastre o primeiro formulário</a>.
+        </div>
+    {% endif %}
+</div>
+
+<div class="card p-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <h2 class="h5 mb-0">Avaliações dos colaboradores</h2>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Filtrar avaliações">
+            {% for chave, rotulo in filtros %}
+                <a class="btn {% if chave == situacao %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?situacao={{ chave }}">
+                    {{ rotulo }}{% if chave == 'pendentes' %} <span class="badge text-bg-light">{{ total_pendentes }}</span>{% endif %}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr><th>Colaborador</th><th>Gestor</th><th>Fim da experiência</th><th>Kanban</th><th>Avaliação</th><th>Decisão</th><th class="text-end">Ações</th></tr>
+            </thead>
+            <tbody>
+                {% for p in periodos %}
+                {% with c=p.colaborador %}
+                <tr>
+                    <td class="fw-semibold">{{ c.nome }}</td>
+                    <td>{% if c.gestor %}{{ c.gestor.nome }}{% else %}<span class="text-warning-emphasis">não definido</span>{% endif %}</td>
+                    <td>{{ p.fim_experiencia|date:'d/m/Y'|default:'—' }}</td>
+                    <td>{{ p.get_status_display }}</td>
+                    <td>
+                        {% if p.avaliacao_realizada %}
+                            <span class="badge text-bg-success">Respondida</span>
+                        {% elif p.status == 'DENTRO_PRAZO' or p.status == 'VENCENDO' %}
+                            <span class="badge text-bg-warning">Pendente</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary" title="O período foi encerrado sem a avaliação do gestor.">Não respondida</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if p.avaliacao_realizada and p.resposta_avaliacao %}{{ p.resposta_avaliacao.get_decisao_display }}{% else %}—{% endif %}
+                    </td>
+                    <td class="text-end text-nowrap">
+                        <a class="btn btn-sm btn-outline-secondary" href="{% url 'experiencia:avaliacao_respostas' p.pk %}" title="Detalhes"><i class="bi bi-eye"></i></a>
+                    </td>
+                </tr>
+                {% endwith %}
+                {% empty %}
+                <tr><td colspan="7" class="text-secondary text-center py-4">Nenhuma avaliação nesta situação.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

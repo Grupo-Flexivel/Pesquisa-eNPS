@@ -67,7 +67,7 @@
                 {% for candidatura in candidaturas %}
                 <tr>
                     <td class="fw-semibold">{{ candidatura.colaborador.nome }}</td>
-                    <td>{{ candidatura.colaborador.empresa.nome }}</td>
+                    <td>{{ candidatura.colaborador.nomes_empresas }}</td>
                     <td>{{ candidatura.data_candidatura|date:'d/m/Y H:i' }}</td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-primary" href="{% url 'vagas:candidatura_respostas' candidatura.pk %}">

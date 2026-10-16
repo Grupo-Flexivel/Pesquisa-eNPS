@@ -6,7 +6,17 @@
 <h1 class="h3 mb-4">{% if colaborador %}Editar{% else %}Novo{% endif %} colaborador</h1>
 
 <div class="card p-4" style="max-width: 700px;">
-    <form method="post">
+    {% if desligamento_agendado %}
+    <div class="alert alert-warning small">
+        <i class="bi bi-calendar-event"></i>
+        Desligamento agendado para <strong>{{ colaborador.data_demissao|date:'d/m/Y' }}</strong>
+        ({{ desligamento_agendado.get_iniciativa_display|lower }} · {{ desligamento_agendado.formulario.nome }}).
+        O colaborador segue ativo até lá; nessa data é inativado e o card vai para "Pendentes".
+        Para cancelar, apague a data de demissão e salve.
+    </div>
+    {% endif %}
+    <form method="post" id="colaboradorForm" data-era-ativo="{% if not colaborador or colaborador.ativo %}1{% else %}0{% endif %}"
+          data-agendado="{% if desligamento_agendado %}1{% else %}0{% endif %}" data-hoje="{% now 'Y-m-d' %}">
         {% csrf_token %}
         {{ form.non_field_errors }}
         
@@ -19,15 +29,68 @@
                     {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                     <div class="text-danger small">{{ field.errors }}</div>
                 </div>
+            {% elif field.name == 'celulares' %}
+                <div class="mb-3">
+                    <label class="form-label">{{ field.label }}</label>
+                    <div id="listaCelulares">
+                        {% for numero in field.value %}
+                            <div class="input-group mb-2 linha-celular">
+                                <input type="tel" name="celulares" value="{{ numero }}" class="form-control campo-celular{% if field.errors %} is-invalid{% endif %}"
+                                       inputmode="numeric" maxlength="15" placeholder="(00) 90000-0000" aria-label="Celular">
+                                <button type="button" class="btn btn-outline-danger btn-remover-celular" title="Remover número"><i class="bi bi-trash"></i></button>
+                            </div>
+                        {% empty %}
+                            <div class="input-group mb-2 linha-celular">
+                                <input type="tel" name="celulares" class="form-control campo-celular"
+                                       inputmode="numeric" maxlength="15" placeholder="(00) 90000-0000" aria-label="Celular">
+                                <button type="button" class="btn btn-outline-danger btn-remover-celular" title="Remover número"><i class="bi bi-trash"></i></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="adicionarCelular">
+                        <i class="bi bi-plus-lg"></i> Adicionar outro número
+                    </button>
+                    <template id="modeloCelular">
+                        <div class="input-group mb-2 linha-celular">
+                            <input type="tel" name="celulares" class="form-control campo-celular"
+                                   inputmode="numeric" maxlength="15" placeholder="(00) 90000-0000" aria-label="Celular">
+                            <button type="button" class="btn btn-outline-danger btn-remover-celular" title="Remover número"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </template>
+                    <div class="text-danger small">{{ field.errors }}</div>
+                </div>
+            {% elif field.name == 'empresas' %}
+                <div class="mb-3">
+                    <label class="form-label" for="empresasDropdown">{{ field.label }}</label>
+                    <!-- Caixas de seleção dentro de um dropdown; "outside" mantém o menu aberto ao marcar várias -->
+                    <div class="dropdown" id="empresasSelecao">
+                        <button class="form-select text-start text-truncate{% if field.errors %} is-invalid{% endif %}" type="button"
+                                id="empresasDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            Selecione as empresas
+                        </button>
+                        <div class="dropdown-menu w-100 px-3 py-2" aria-labelledby="empresasDropdown" style="max-height: 300px; overflow-y: auto;">
+                            {% for opcao in field %}
+                                <div class="form-check py-1">
+                                    {{ opcao.tag }}
+                                    <label class="form-check-label w-100" for="{{ opcao.id_for_label }}">{{ opcao.choice_label }}</label>
+                                </div>
+                            {% empty %}
+                                <div class="small text-secondary">Nenhuma empresa cadastrada.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    <div class="text-danger small">{{ field.errors }}</div>
+                </div>
             {% else %}
-                <div class="mb-3 {% if field.name == 'ativo' %}form-check{% endif %}">
-                    {% if field.name == 'ativo' %}
+                <div class="mb-3 {% if field.name == 'ativo' or field.name == 'eh_gestor' %}form-check{% endif %}">
+                    {% if field.name == 'ativo' or field.name == 'eh_gestor' %}
                         {{ field }} {{ field.label_tag }}
                     {% else %}
                         {{ field.label_tag }}
                         {{ field }}
                     {% endif %}
-                    {% if field.name == 'perfil' and field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
                     <div class="text-danger small">{{ field.errors }}</div>
                 </div>
             {% endif %}
@@ -45,11 +108,11 @@
         <!-- Adicionamos fundo branco forçado e z-index alto -->
         <div class="modal-content bg-white shadow-lg" style="background-color: #ffffff !important; position: relative; z-index: 1055;">
             <div class="modal-header">
-                <h5 class="modal-title">Inativar {{ colaborador.nome }}</h5>
+                <h5 class="modal-title" id="modalTitulo">Inativar {{ colaborador.nome }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body text-start">
-                <p class="text-secondary small">Informe o motivo do desligamento. Um card será criado automaticamente na coluna "Pendentes" do Kanban com o link a ser enviado.</p>
+                <p class="text-secondary small" id="modalExplicacao">Informe o motivo do desligamento. Um card será criado automaticamente na coluna "Pendentes" do Kanban com o link a ser enviado.</p>
                 <div class="mb-3">
                     <label class="form-label d-block">Motivo do desligamento</label>
                     <div class="form-check">
@@ -95,10 +158,124 @@
             selectPerfil.addEventListener('change', atualizarCamposAcesso);
         }
 
-        const form = document.querySelector('form[method="post"]');
+        // Dropdown de empresas: o botão mostra as empresas marcadas
+        const selecaoEmpresas = document.getElementById('empresasSelecao');
+        if (selecaoEmpresas) {
+            const botaoEmpresas = document.getElementById('empresasDropdown');
+            const caixasEmpresas = selecaoEmpresas.querySelectorAll('input[type="checkbox"]');
+            function atualizarResumoEmpresas() {
+                const marcadas = Array.from(caixasEmpresas)
+                    .filter(caixa => caixa.checked)
+                    .map(caixa => selecaoEmpresas.querySelector(`label[for="${caixa.id}"]`).textContent.trim());
+                botaoEmpresas.textContent = marcadas.length ? marcadas.join(', ') : 'Selecione as empresas';
+                botaoEmpresas.title = marcadas.join(', ');
+            }
+            caixasEmpresas.forEach(caixa => caixa.addEventListener('change', atualizarResumoEmpresas));
+            atualizarResumoEmpresas();
+        }
+
+        // Celulares: máscara (DDD) 9XXXX-XXXX em cada campo, adicionar e remover números
+        const listaCelulares = document.getElementById('listaCelulares');
+        if (listaCelulares) {
+            function mascararCelular(input) {
+                const d = input.value.replace(/\D/g, '').slice(0, 11);
+                let v = d;
+                if (d.length > 7) v = `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+                else if (d.length > 2) v = `(${d.slice(0, 2)}) ${d.slice(2)}`;
+                else if (d.length > 0) v = `(${d}`;
+                input.value = v;
+            }
+            listaCelulares.querySelectorAll('.campo-celular').forEach(mascararCelular);
+            listaCelulares.addEventListener('input', event => {
+                if (event.target.classList.contains('campo-celular')) mascararCelular(event.target);
+            });
+
+            document.getElementById('adicionarCelular').addEventListener('click', () => {
+                listaCelulares.appendChild(document.getElementById('modeloCelular').content.cloneNode(true));
+                const campos = listaCelulares.querySelectorAll('.campo-celular');
+                campos[campos.length - 1].focus();
+            });
+
+            listaCelulares.addEventListener('click', event => {
+                const botao = event.target.closest('.btn-remover-celular');
+                if (!botao) return;
+                // A última linha só é limpa, para o campo continuar visível.
+                if (listaCelulares.querySelectorAll('.linha-celular').length > 1) {
+                    botao.closest('.linha-celular').remove();
+                } else {
+                    botao.closest('.linha-celular').querySelector('.campo-celular').value = '';
+                }
+            });
+        }
+
+        // Pelo id: a sidebar (Sair) e o sininho também têm formulários POST na página.
+        const form = document.getElementById('colaboradorForm');
         const checkboxAtivo = document.getElementById('id_ativo');
         const motivoModalEl = document.getElementById('motivoModal');
-        
+        const inputDemissao = document.getElementById('id_data_demissao');
+
+        // Data de demissão e status andam juntos (a mesma regra é validada no servidor):
+        // data até hoje inativa agora; data futura mantém ativo e agenda a inativação para o dia.
+        const hoje = form ? form.dataset.hoje : '';
+        const eraAtivo = form ? form.dataset.eraAtivo === '1' : false;
+        const temAgendamento = form ? form.dataset.agendado === '1' : false;
+        const demissaoFutura = () => Boolean(inputDemissao && inputDemissao.value && inputDemissao.value > hoje);
+
+        if (form && checkboxAtivo && inputDemissao) {
+            const erroDemissao = document.createElement('div');
+            erroDemissao.className = 'invalid-feedback';
+            erroDemissao.textContent = 'Informe a data de demissão para inativar o colaborador.';
+            inputDemissao.insertAdjacentElement('afterend', erroDemissao);
+
+            const avisoFutura = document.createElement('div');
+            avisoFutura.className = 'form-text text-warning-emphasis d-none';
+            inputDemissao.parentElement.appendChild(avisoFutura);
+
+            function atualizarAvisoFutura() {
+                const futura = eraAtivo && demissaoFutura();
+                avisoFutura.classList.toggle('d-none', !futura);
+                if (futura) {
+                    const [ano, mes, dia] = inputDemissao.value.split('-');
+                    avisoFutura.textContent = `Data futura: o colaborador continua ativo e será inativado em ${dia}/${mes}/${ano}.`;
+                }
+            }
+
+            function limparErroDemissao() {
+                inputDemissao.classList.remove('is-invalid');
+            }
+
+            inputDemissao.addEventListener('change', () => {
+                limparErroDemissao();
+                if (eraAtivo && inputDemissao.value) checkboxAtivo.checked = demissaoFutura();
+                atualizarAvisoFutura();
+            });
+
+            checkboxAtivo.addEventListener('change', () => {
+                if (checkboxAtivo.checked) {
+                    // Voltar a ativo descarta uma demissão de hoje/passada (a futura continua agendada).
+                    if (!demissaoFutura()) inputDemissao.value = '';
+                    limparErroDemissao();
+                } else if (eraAtivo) {
+                    // Inativar agora: uma data futura não serve, pede a data de hoje ou anterior.
+                    if (demissaoFutura()) inputDemissao.value = '';
+                    if (!inputDemissao.value) inputDemissao.focus();
+                }
+                atualizarAvisoFutura();
+            });
+            atualizarAvisoFutura();
+
+            // Registrado antes do listener do modal: sem data, nem abre o modal do motivo.
+            form.addEventListener('submit', event => {
+                if (eraAtivo && !checkboxAtivo.checked && !inputDemissao.value) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    inputDemissao.classList.add('is-invalid');
+                    inputDemissao.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    inputDemissao.focus();
+                }
+            });
+        }
+
         if (form && checkboxAtivo && motivoModalEl) {
             const motivoModal = new bootstrap.Modal(motivoModalEl);
             const select = document.getElementById('modalFormularioSelect');
@@ -112,15 +289,30 @@
                 });
             });
 
+            // O motivo é pedido ao inativar ou agendar; com desligamento já agendado, reaproveita o motivo gravado.
             form.addEventListener('submit', function (event) {
-                if (!confirmado && !checkboxAtivo.checked) {
+                const desligando = !checkboxAtivo.checked || demissaoFutura();
+                if (!confirmado && desligando && !temAgendamento) {
                     event.preventDefault();
+                    const titulo = document.getElementById('modalTitulo');
+                    const explicacao = document.getElementById('modalExplicacao');
+                    if (demissaoFutura()) {
+                        const [ano, mes, dia] = inputDemissao.value.split('-');
+                        titulo.textContent = 'Agendar desligamento de {{ colaborador.nome|escapejs }}';
+                        explicacao.textContent = `Informe o motivo do desligamento. O colaborador continua ativo até ${dia}/${mes}/${ano}; nessa data ele é inativado e o card vai para a coluna "Pendentes" do Kanban com o link a ser enviado.`;
+                    } else {
+                        titulo.textContent = 'Inativar {{ colaborador.nome|escapejs }}';
+                        explicacao.textContent = 'Informe o motivo do desligamento. Um card será criado automaticamente na coluna "Pendentes" do Kanban com o link a ser enviado.';
+                    }
                     motivoModal.show();
                 }
             });
 
-            document.getElementById('modalCancelar').addEventListener('click', () => {
+            // Fechou o modal sem confirmar (Cancelar, X ou Esc): volta a ativo e descarta a data de demissão.
+            motivoModalEl.addEventListener('hidden.bs.modal', () => {
+                if (confirmado) return;
                 checkboxAtivo.checked = true;
+                if (inputDemissao) inputDemissao.value = '';
             });
 
             document.getElementById('modalConfirmar').addEventListener('click', () => {

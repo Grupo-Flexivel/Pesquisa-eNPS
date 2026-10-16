@@ -29,6 +29,8 @@ urlpatterns = [
     path('', include('pesquisas.urls')),
     path('', include('desligamentos.urls')),
     path('', include('vagas.urls')),
+    path('', include('experiencia.urls')),
+    path('', include('notificacoes.urls')),
     path('banco-de-talentos/organizacao/', include('organizacao.urls')),
     path('banco-de-talentos/curriculos/', include('talentos.urls')),
 ]

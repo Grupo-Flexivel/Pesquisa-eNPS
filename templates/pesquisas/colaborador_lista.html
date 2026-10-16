@@ -6,9 +6,27 @@
     <div>
         <h1 class="h3">Colaboradores</h1>
     </div>
-    <a class="btn btn-primary" href="{% url 'pesquisas:colaborador_criar' %}">
-        <i class="bi bi-person-plus"></i> Novo colaborador
-    </a>
+    <div class="d-flex gap-2">
+        <div class="btn-group">
+            <a class="btn btn-outline-primary" href="{% url 'pesquisas:colaborador_exportar' %}?{{ request.GET.urlencode }}"
+               title="Exporta os colaboradores conforme os filtros aplicados">
+                <i class="bi bi-file-earmark-arrow-down"></i> Exportar
+            </a>
+            <button type="button" class="btn btn-outline-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="visually-hidden">Escolher formato</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="{% url 'pesquisas:colaborador_exportar' %}?{{ request.GET.urlencode }}">Excel (.xlsx)</a></li>
+                <li><a class="dropdown-item" href="{% url 'pesquisas:colaborador_exportar' %}?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}formato=csv">CSV (.csv)</a></li>
+            </ul>
+        </div>
+        <a class="btn btn-outline-primary" href="{% url 'pesquisas:colaborador_importar' %}">
+            <i class="bi bi-file-earmark-arrow-up"></i> Importar colaboradores
+        </a>
+        <a class="btn btn-primary" href="{% url 'pesquisas:colaborador_criar' %}">
+            <i class="bi bi-person-plus"></i> Novo colaborador
+        </a>
+    </div>
 </div>
 
 <div class="card p-4">
@@ -44,7 +62,7 @@
                 <tr>
                     <th>Nome</th>
                     <th>CPF / CNPJ</th>
-                    <th>Empresa</th>
+                    <th>Empresas</th>
                     <th>Status</th>
                     <th class="text-end">Ações</th>
                 </tr>
@@ -54,10 +72,15 @@
                 <tr>
                     <td>{{ colaborador.nome }}</td>
                     <td>{{ colaborador.documento }}</td>
-                    <td>{{ colaborador.empresa.nome }}</td>
+                    <td>{{ colaborador.nomes_empresas }}</td>
                     <td>
                         {% if colaborador.ativo %}
                             <span class="badge text-bg-success">Ativo</span>
+                            {% if colaborador.data_demissao %}
+                                <span class="badge text-bg-warning" title="Será inativado nesta data">
+                                    <i class="bi bi-calendar-event"></i> Desligamento em {{ colaborador.data_demissao|date:'d/m/Y' }}
+                                </span>
+                            {% endif %}
                         {% else %}
                             <span class="badge text-bg-secondary">Inativo</span>
                         {% endif %}
@@ -103,7 +126,8 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
                 <div class="modal-body text-start">
-                    <p class="text-secondary small">Informe o motivo do desligamento. Um card será criado automaticamente na coluna "Pendentes" do Kanban com o link a ser enviado.</p>
+                    <p class="text-secondary small">Informe o motivo do desligamento. Um card será criado automaticamente na coluna "Pendentes" do Kanban com o link a ser enviado.
+                        Com data de demissão futura, o colaborador continua ativo e só é inativado (e o card criado) nesse dia.</p>
                     <div class="mb-3">
                         <label class="form-label d-block">Motivo do desligamento</label>
                         <div class="form-check">
@@ -114,6 +138,11 @@
                             <input class="form-check-input iniciativa-radio" type="radio" name="iniciativa" value="COLABORADOR" id="iniciativaColaborador{{ colaborador.pk }}" required>
                             <label class="form-check-label" for="iniciativaColaborador{{ colaborador.pk }}">Iniciativa do colaborador</label>
                         </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="dataDemissao{{ colaborador.pk }}">Data de demissão</label>
+                        <input type="date" class="form-control" name="data_demissao" id="dataDemissao{{ colaborador.pk }}" required
+                               {% if colaborador.data_contratacao %}min="{{ colaborador.data_contratacao|date:'Y-m-d' }}"{% endif %}>
                     </div>
                     <div class="mb-1">
                         <label class="form-label" for="formularioSelect{{ colaborador.pk }}">Formulário / link a ser enviado</label>

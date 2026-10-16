@@ -6,7 +6,7 @@
     <div>
         <h1 class="h3 mb-1">Respostas de {{ desligamento.colaborador.nome }}</h1>
         <p class="text-secondary mb-0">
-            {{ desligamento.colaborador.empresa.nome }} ·
+            {{ desligamento.colaborador.nomes_empresas }} ·
             {{ desligamento.get_iniciativa_display }} ·
             Respondido em {{ desligamento.data_resposta|date:'d/m/Y H:i' }}
         </p>

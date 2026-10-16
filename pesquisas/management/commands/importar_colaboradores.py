@@ -1,63 +1,34 @@
-import csv
 from pathlib import Path
 
-from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
 
-from pesquisas.models import Colaborador, Empresa, somente_digitos
+from pesquisas.importacao import COLUNAS_OBRIGATORIAS, COLUNAS_OPCIONAIS, ErroImportacao, importar_colaboradores
 
 
 class Command(BaseCommand):
-    help = 'Importa colaboradores ativos de um CSV UTF-8 com as colunas nome, documento e empresa (aceita vírgula ou ponto e vírgula).'
+    help = (
+        'Importa colaboradores de um CSV (UTF-8 ou Windows-1252, vírgula ou ponto e vírgula) ou XLSX. '
+        f'Colunas obrigatórias: {", ".join(COLUNAS_OBRIGATORIAS)}. '
+        f'Opcionais: {", ".join(COLUNAS_OPCIONAIS)}. A ordem das colunas não importa.'
+    )
 
     def add_arguments(self, parser):
-        parser.add_argument('arquivo_csv', type=Path)
+        parser.add_argument('arquivo', type=Path)
 
     def handle(self, *args, **options):
-        caminho = options['arquivo_csv'].resolve()
+        caminho = options['arquivo'].resolve()
         if not caminho.is_file():
             raise CommandError(f'Arquivo não encontrado: {caminho}')
 
-        criados = atualizados = 0
         try:
-            with caminho.open('r', encoding='utf-8-sig', newline='') as arquivo, transaction.atomic():
-                amostra = arquivo.read(2048)
-                arquivo.seek(0)
-                try:
-                    delimitador = csv.Sniffer().sniff(amostra).delimiter
-                except csv.Error:
-                    delimitador = ','
+            resultado = importar_colaboradores(caminho.read_bytes(), caminho.name)
+        except OSError as exc:
+            raise CommandError(f'Não foi possível ler o arquivo: {exc}') from exc
+        except ErroImportacao as exc:
+            raise CommandError('Nada foi importado:\n' + '\n'.join(exc.erros)) from exc
 
-                leitor = csv.DictReader(arquivo, delimiter=delimitador)
-                if leitor.fieldnames != ['nome', 'documento', 'empresa']:
-                    raise CommandError(
-                        'O CSV deve conter exatamente as colunas nome,documento,empresa, '
-                        f'nesta ordem (encontrado: {leitor.fieldnames}).'
-                    )
-
-                for numero, linha in enumerate(leitor, start=2):
-                    nome = (linha.get('nome') or '').strip()
-                    documento = somente_digitos(linha.get('documento'))
-                    nome_empresa = ' '.join((linha.get('empresa') or '').split())
-                    if not nome:
-                        raise CommandError(f'Linha {numero}: nome vazio.')
-                    if not nome_empresa:
-                        raise CommandError(f'Linha {numero}: empresa vazia.')
-                    try:
-                        empresa = Empresa.objects.filter(nome__iexact=nome_empresa).first()
-                        if empresa is None:
-                            empresa = Empresa(nome=nome_empresa)
-                            empresa.full_clean()
-                            empresa.save()
-                        colaborador, criado = Colaborador.objects.update_or_create(
-                            documento=documento, defaults={'nome': nome, 'empresa': empresa, 'ativo': True}
-                        )
-                    except ValidationError as exc:
-                        raise CommandError(f'Linha {numero}: {exc}') from exc
-                    criados += int(criado)
-                    atualizados += int(not criado)
-        except (OSError, UnicodeError, csv.Error) as exc:
-            raise CommandError(f'Não foi possível ler o CSV: {exc}') from exc
-
-        self.stdout.write(self.style.SUCCESS(f'Importação concluída: {criados} criados e {atualizados} atualizados.'))
+        if resultado.colunas_ignoradas:
+            self.stdout.write(self.style.WARNING(f'Colunas ignoradas: {", ".join(resultado.colunas_ignoradas)}'))
+        self.stdout.write(self.style.SUCCESS(
+            f'Importação concluída: {resultado.criados} criados e {resultado.atualizados} atualizados.'
+        ))

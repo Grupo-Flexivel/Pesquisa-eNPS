@@ -85,6 +85,8 @@ class Desligamento(models.Model):
         COLABORADOR = 'COLABORADOR', 'Iniciativa do colaborador'
 
     class Status(models.TextChoices):
+        # Agendado: data de demissão futura. Fica fora do Kanban até a data, quando vira Pendente.
+        AGENDADO = 'AGENDADO', 'Agendado'
         PENDENTE = 'PENDENTE', 'Pendente'
         AGUARDANDO_RESPOSTA = 'AGUARDANDO_RESPOSTA', 'Aguardando resposta'
         RESPONDIDO = 'RESPONDIDO', 'Respondido'
@@ -105,7 +107,7 @@ class Desligamento(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=('colaborador',),
-                condition=models.Q(status__in=('PENDENTE', 'AGUARDANDO_RESPOSTA')),
+                condition=models.Q(status__in=('AGENDADO', 'PENDENTE', 'AGUARDANDO_RESPOSTA')),
                 name='desligamento_unico_em_aberto_por_colaborador',
             ),
         ]

@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="mb-4">
-    <a class="text-decoration-none fw-medium" href="{% url 'pesquisas:pesquisa_lista' %}" style="color: #004b46;">
+    <a class="text-decoration-none fw-medium" href="{% url 'pesquisas:pesquisa_lista' %}" style="color: #003d3d;">
         <i class="bi bi-arrow-left"></i> Pesquisas
     </a>
     <h1 class="h3 mt-2 mb-1">{{ pesquisa.titulo }}</h1>
@@ -49,7 +49,7 @@
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
-        <div class="card p-4 h-100 text-white" style="background-color: #004b46;">
+        <div class="card p-4 h-100 text-white" style="background-color: #003d3d;">
             <span>eNPS</span>
             <span class="metric">{{ enps|floatformat:1 }}%</span>
         </div>
@@ -63,7 +63,7 @@
     <div class="row text-center g-3">
         <div class="col-md-4">
             <div class="border rounded-3 p-3">
-                <div class="fs-3 fw-bold" style="color: #004b46;">{{ promotores }}</div>
+                <div class="fs-3 fw-bold" style="color: #003d3d;">{{ promotores }}</div>
                 <div>Promotores (9–10)</div>
             </div>
         </div>
@@ -101,7 +101,7 @@
                         {% for det in item.detalhes %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 <span>Resposta anônima</span>
-                                <span class="badge rounded-pill text-white" style="background-color: #004b46;">{{ det.valor_inteiro }}</span>
+                                <span class="badge rounded-pill text-white" style="background-color: #003d3d;">{{ det.valor_inteiro }}</span>
                             </li>
                         {% empty %}
                             <li class="list-group-item text-secondary">Nenhuma resposta registrada para esta pergunta ainda.</li>

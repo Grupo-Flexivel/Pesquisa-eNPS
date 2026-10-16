@@ -21,7 +21,24 @@ services:
       db_vector:
         condition: service_healthy
     restart: always
-    
+
+  # Rotinas periódicas: Kanban de período de experiência (move cards para "Vencendo", efetiva quem
+  # terminou o período e dispara as notificações) e desligamentos agendados (inativa quem chegou
+  # à data de demissão). Idempotentes: rodar de hora em hora é seguro.
+  experiencia_job:
+    build: .
+    container_name: pesquisa_enps_experiencia_job
+    command: sh -c "while true; do python manage.py atualizar_experiencia; python manage.py processar_desligamentos_agendados; sleep 3600; done"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      RUN_SETUP: "false"  # migrate/collectstatic ficam a cargo do serviço web
+    depends_on:
+      - web
+    restart: always
+
     # Container exclusivo para a IA / pgvector
   db_vector:
     image: pgvector/pgvector:pg16 

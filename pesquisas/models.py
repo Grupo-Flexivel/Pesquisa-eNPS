@@ -5,7 +5,7 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models.functions import Lower
 from django.urls import reverse
 from django.utils import timezone
@@ -54,6 +54,43 @@ def validar_documento(valor):
         validar_cnpj(documento)
     else:
         raise ValidationError('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.')
+
+
+def formatar_celular(valor):
+    """Normaliza o celular para o padrão (DDD) 9XXXX-XXXX; valores fora do padrão voltam como vieram."""
+    digitos = somente_digitos(valor)
+    if len(digitos) == 13 and digitos.startswith('55'):
+        digitos = digitos[2:]
+    if len(digitos) != 11:
+        return (valor or '').strip()
+    return f'({digitos[:2]}) {digitos[2:7]}-{digitos[7:]}'
+
+
+def validar_celular(valor):
+    if not re.fullmatch(r'\([1-9]\d\) 9\d{4}-\d{4}', formatar_celular(valor)):
+        raise ValidationError('Informe um celular válido no formato (DDD) 9XXXX-XXXX.')
+
+
+def normalizar_celulares(valores):
+    """Formata cada número, descarta os vazios e remove repetidos, mantendo a ordem."""
+    if isinstance(valores, str):
+        valores = [valores]
+    celulares = []
+    for valor in valores or []:
+        celular = formatar_celular(str(valor))
+        if celular and celular not in celulares:
+            celulares.append(celular)
+    return celulares
+
+
+def validar_celulares(valores):
+    if not isinstance(valores, list):
+        raise ValidationError('Informe a lista de celulares.')
+    invalidos = [valor for valor in valores if not re.fullmatch(r'\([1-9]\d\) 9\d{4}-\d{4}', formatar_celular(str(valor)))]
+    if invalidos:
+        raise ValidationError(
+            f'Celular inválido: {", ".join(map(str, invalidos))}. Use o formato (DDD) 9XXXX-XXXX.'
+        )
 
 
 class PerfilAcesso(models.Model):
@@ -156,10 +193,22 @@ class Empresa(models.Model):
         return self.nome
 
 
+class ColaboradorManager(models.Manager):
+    def create(self, empresas=(), **kwargs):
+        """Aceita `empresas=[...]`, já que relações muitos-para-muitos só podem ser gravadas após o save."""
+        with transaction.atomic(using=self.db):
+            colaborador = super().create(**kwargs)
+            if empresas:
+                colaborador.empresas.set(empresas)
+        return colaborador
+
+
 class Colaborador(models.Model):
     nome = models.CharField(max_length=200)
     documento = models.CharField(max_length=14, unique=True, validators=[validar_documento])
-    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, related_name='colaboradores')
+    # Um mesmo CPF pode trabalhar em mais de uma empresa/unidade: continua sendo um único
+    # cadastro (uma resposta por pesquisa eNPS), mas aparece em cada uma das empresas.
+    empresas = models.ManyToManyField(Empresa, related_name='colaboradores', verbose_name='Empresas')
     ativo = models.BooleanField(default=True)
 
     usuario = models.OneToOneField(
@@ -169,21 +218,58 @@ class Colaborador(models.Model):
         blank=True, 
         related_name='colaborador'
     )
+    eh_gestor = models.BooleanField(
+        'É gestor', default=False,
+        help_text='Marque para que este colaborador possa ser escolhido como gestor responsável de outros.',
+    )
+    # Colaborador (marcado como gestor) que avalia este colaborador, ex.: no período de experiência.
+    # Os avisos do sininho chegam pelo login (`usuario`) vinculado ao gestor.
+    gestor = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='liderados',
+        verbose_name='Gestor responsável',
+    )
     
     data_criacao = models.DateTimeField(default=timezone.now)
     data_inativacao = models.DateTimeField(null=True, blank=True)
     data_ativacao = models.DateTimeField(null=True, blank=True)
-    
+
+    # Opcionais: só nome, documento e empresas são obrigatórios no cadastro.
+    data_nascimento = models.DateField('Data de nascimento', null=True, blank=True)
+    data_contratacao = models.DateField('Data de contratação', null=True, blank=True)
+    data_demissao = models.DateField('Data de demissão', null=True, blank=True)
+
+    # Lista de celulares, cada um guardado já formatado: (DDD) 9XXXX-XXXX.
+    celulares = models.JSONField('Celulares', default=list, blank=True, validators=[validar_celulares])
+    email = models.EmailField('E-mail', blank=True, default='')
+
+    objects = ColaboradorManager()
+
     class Meta:
         ordering = ('nome',)
+
+    @property
+    def nomes_empresas(self):
+        # Ordena em Python para aproveitar o prefetch_related('empresas') das listagens.
+        return ', '.join(sorted(e.nome for e in self.empresas.all()))
 
     def clean(self):
         super().clean()
         self.documento = somente_digitos(self.documento)
         validar_documento(self.documento)
+        self.celulares = normalizar_celulares(self.celulares)
+        self.email = (self.email or '').strip().lower()
+        if self.data_nascimento and self.data_nascimento > timezone.localdate():
+            raise ValidationError({'data_nascimento': 'A data de nascimento não pode ser futura.'})
+        if self.data_contratacao and self.data_demissao and self.data_demissao < self.data_contratacao:
+            raise ValidationError({'data_demissao': 'A data de demissão não pode ser anterior à data de contratação.'})
 
     def save(self, *args, **kwargs):
         self.documento = somente_digitos(self.documento)
+        self.celulares = normalizar_celulares(self.celulares)
         self.full_clean()
         return super().save(*args, **kwargs)
 
@@ -307,3 +393,22 @@ class DetalheResposta(models.Model):
 
     def __str__(self):
         return f'Detalhe #{self.pk}'
+
+class ImportacaoColaboradores(models.Model):
+    """Planilha de colaboradores em revisão: as linhas ficam aqui até a confirmação, sem tocar no cadastro.
+
+    `linhas` guarda [{'numero': nº da linha na planilha, 'valores': {coluna: texto}}]; os erros não são
+    guardados, e sim recalculados a cada edição (dependem também do que já está cadastrado).
+    """
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='importacoes_colaboradores')
+    nome_arquivo = models.CharField(max_length=255)
+    linhas = models.JSONField(default=list)
+    colunas_ignoradas = models.JSONField(default=list)
+    criada_em = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = 'importação de colaboradores em revisão'
+        verbose_name_plural = 'importações de colaboradores em revisão'
+
+    def __str__(self):
+        return f'{self.nome_arquivo} ({self.usuario})'

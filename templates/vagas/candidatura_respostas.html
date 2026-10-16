@@ -6,7 +6,7 @@
     <div>
         <h1 class="h3 mb-1">Respostas de {{ candidatura.colaborador.nome }}</h1>
         <p class="text-secondary mb-0">
-            {{ candidatura.colaborador.empresa.nome }} ·
+            {{ candidatura.colaborador.nomes_empresas }} ·
             Vaga: {{ candidatura.vaga.titulo }} ·
             Candidatura em {{ candidatura.data_candidatura|date:'d/m/Y H:i' }}
         </p>

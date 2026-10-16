@@ -110,7 +110,9 @@ class ColaboradorFormAcessoTests(TestCase):
         self.admin = criar_usuario('a', administrador=True)
         self.perfil = PerfilAcesso.objects.create(nome='Recrutamento', modulos_permitidos=['talentos.organizacao'])
         self.dados = {
-            'nome': 'Ana Souza', 'documento': '52998224725', 'empresa': self.empresa.pk, 'ativo': True,
+            'nome': 'Ana Souza', 'documento': '52998224725', 'empresas': [self.empresa.pk], 'ativo': True,
+            'data_contratacao': '2024-03-01',
+            'celulares': ['47999998888'], 'email': 'ana@exemplo.com.br',
             'perfil': str(self.perfil.pk), 'username': 'ana.souza',
         }
 
@@ -156,7 +158,7 @@ class ColaboradorFormAcessoTests(TestCase):
 
         gestor = criar_usuario('g', modulos=['enps', 'desligamentos', 'talentos'])
         form = ColaboradorForm(
-            {'nome': 'Ana S.', 'documento': '52998224725', 'empresa': self.empresa.pk, 'ativo': True,
+            {'nome': 'Ana S.', 'documento': '52998224725', 'empresas': [self.empresa.pk], 'ativo': True,
              'perfil': 'ADMINISTRADOR', 'username': 'tentativa'},
             instance=colaborador, usuario_logado=gestor,
         )

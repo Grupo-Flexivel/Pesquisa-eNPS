@@ -16,11 +16,16 @@ from .forms import (
 from .models import (
     DetalheRespostaDesligamento, Desligamento, FormularioDesligamento, PerguntaDesligamento, RespostaDesligamento,
 )
+from .services import resolver_aviso_envio
 
 
 @modulo_required(DESLIGAMENTOS)
 def kanban(request):
-    desligamentos = Desligamento.objects.select_related('colaborador', 'colaborador__empresa', 'formulario')
+    from .services import processar_desligamentos_agendados
+
+    # Além da rotina de hora em hora: o card agendado entra em Pendentes assim que chega a data.
+    processar_desligamentos_agendados()
+    desligamentos = Desligamento.objects.select_related('colaborador', 'formulario').prefetch_related('colaborador__empresas')
     contexto = {
         'pendentes': desligamentos.filter(status=Desligamento.Status.PENDENTE),
         'aguardando': desligamentos.filter(status=Desligamento.Status.AGUARDANDO_RESPOSTA),
@@ -36,6 +41,7 @@ def desligamento_marcar_enviado(request, pk):
     desligamento.status = Desligamento.Status.AGUARDANDO_RESPOSTA
     desligamento.data_envio = timezone.now()
     desligamento.save(update_fields=['status', 'data_envio'])
+    resolver_aviso_envio(desligamento)
     messages.success(request, f'Link enviado para {desligamento.colaborador.nome}. O card foi movido para "Aguardando resposta".')
     return redirect('desligamentos:kanban')
 
@@ -43,7 +49,7 @@ def desligamento_marcar_enviado(request, pk):
 @modulo_required(DESLIGAMENTOS)
 def desligamento_respostas(request, pk):
     desligamento = get_object_or_404(
-        Desligamento.objects.select_related('colaborador', 'colaborador__empresa', 'formulario'),
+        Desligamento.objects.select_related('colaborador', 'formulario'),
         pk=pk, status=Desligamento.Status.RESPONDIDO,
     )
     detalhes = DetalheRespostaDesligamento.objects.filter(

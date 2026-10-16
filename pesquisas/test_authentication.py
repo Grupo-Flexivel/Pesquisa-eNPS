@@ -126,7 +126,9 @@ class HybridAuthenticationTests(TestCase):
         form = ColaboradorForm(usuario_logado=admin, data={
             'nome': 'João Silva',
             'documento': '52998224725',
-            'empresa': empresa.pk,
+            'empresas': [empresa.pk],
+            'data_contratacao': '2024-03-01',
+            'celulares': ['47999998888'], 'email': 'joao.silva@exemplo.com.br',
             'ativo': True,
             'perfil': str(perfil.pk),
             'username': ' Joao.Silva ',

@@ -73,17 +73,16 @@ class BasePerguntaVagaFormSet(BaseInlineFormSet):
         super().clean()
         if any(self.errors):
             return
-        validas = [form for form in self.forms if form.cleaned_data and not form.cleaned_data.get('DELETE', False)]
-        if len(validas) < 1:
-            raise forms.ValidationError('Cadastre ao menos uma pergunta.')
-        ordens = [form.cleaned_data['ordem'] for form in validas]
+        
+        validas = [form for form in self.forms if form.cleaned_data and not form.cleaned_data.get('DELETE', False)]        
+        ordens = [form.cleaned_data['ordem'] for form in validas if form.cleaned_data.get('ordem') is not None]
         if len(ordens) != len(set(ordens)):
             raise forms.ValidationError('A ordem das perguntas não pode se repetir.')
 
 
 PerguntaVagaFormSet = inlineformset_factory(
     Vaga, PerguntaVaga, form=PerguntaVagaForm, formset=BasePerguntaVagaFormSet,
-    extra=1, min_num=1, validate_min=True, can_delete=True,
+    extra=1, min_num=0, validate_min=False, can_delete=True,
 )
 
 

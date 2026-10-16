@@ -1,0 +1,423 @@
+{% extends 'base.html' %}
+
+{% block title %}Revisar importação{% endblock %}
+
+{% block extra_css %}
+<style>
+    .contadores { display: flex; flex-wrap: wrap; gap: .75rem; }
+    .contador { display: flex; align-items: baseline; gap: .4rem; padding: .5rem .9rem; border-radius: .5rem; border: 1px solid var(--bs-border-color); font-size: .9rem; }
+    .contador strong { font-size: 1.35rem; line-height: 1; font-variant-numeric: tabular-nums; }
+    .contador.valido { background: var(--bs-success-bg-subtle); border-color: var(--bs-success-border-subtle); color: var(--bs-success-text-emphasis); }
+    .contador.erro { background: var(--bs-danger-bg-subtle); border-color: var(--bs-danger-border-subtle); color: var(--bs-danger-text-emphasis); }
+    .contador.erro.zerado { background: var(--bs-tertiary-bg); border-color: var(--bs-border-color); color: var(--bs-secondary-color); }
+
+    .tabela-rolagem { max-height: 62vh; overflow: auto; border: 1px solid var(--bs-border-color); border-top: 0; border-radius: 0 0 .5rem .5rem; }
+    .planilha { font-size: .875rem; margin: 0; border-collapse: separate; border-spacing: 0; }
+    .planilha thead th { position: sticky; top: 0; z-index: 3; background: var(--bs-tertiary-bg); white-space: nowrap; font-weight: 600; padding: .45rem .5rem; border-bottom: 1px solid var(--bs-border-color); }
+    .planilha td { padding: 0; vertical-align: middle; border-bottom: 1px solid var(--bs-border-color-translucent); }
+    .planilha .num { position: sticky; left: 0; z-index: 2; background: var(--bs-body-bg); text-align: right; color: var(--bs-secondary-color); padding: .3rem .5rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .planilha thead .num { z-index: 4; background: var(--bs-tertiary-bg); }
+    .planilha .texto { padding: .35rem .5rem; white-space: nowrap; }
+    .planilha tr.linha-erro .num { box-shadow: inset 3px 0 0 var(--bs-danger); }
+    .planilha tr.linha-erro .aviso-linha { color: var(--bs-danger); margin-left: .25rem; cursor: help; }
+
+    .celula { display: block; width: 100%; border: 1px solid transparent; border-radius: 0; padding: .32rem .5rem; background: transparent; color: inherit; font: inherit; }
+    .celula:hover { border-color: var(--bs-border-color); }
+    .celula:focus { outline: 0; background: var(--bs-body-bg); border-color: var(--bs-primary); box-shadow: inset 0 0 0 1px var(--bs-primary); }
+    .celula.com-erro { background: var(--bs-danger-bg-subtle); border-color: var(--bs-danger); }
+    .celula.com-erro:focus { box-shadow: inset 0 0 0 1px var(--bs-danger); }
+    .celula.salvando { opacity: .55; }
+
+    .col-nome, .col-email { min-width: 15rem; }
+    .col-empresa, .col-gestor { min-width: 12rem; }
+    .col-documento, .col-celular { min-width: 11rem; }
+    .col-data_nascimento, .col-data_contratacao, .col-data_demissao { min-width: 8.5rem; }
+    .col-eh_gestor { min-width: 5.5rem; }
+
+    #dica { min-height: 1.6rem; }
+    @keyframes corrigida { from { background: var(--bs-success-bg-subtle); } to { background: transparent; } }
+    .planilha tr.recem-corrigida td:not(.num) { animation: corrigida 2.5s ease-out; }
+    .vazio { padding: 2.5rem 1rem; text-align: center; color: var(--bs-secondary-color); }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-1">Importar colaboradores</h1>
+<p class="text-muted small mb-3"><i class="bi bi-file-earmark-spreadsheet"></i> {{ importacao.nome_arquivo }} · nada foi gravado no cadastro ainda</p>
+{% include "pesquisas/includes/importacao_passos.html" with passo=2 %}
+
+<div id="importacao"
+     data-url-celula="{% url 'pesquisas:colaborador_importar_celula' importacao.pk %}"
+     data-url-descartar="{% url 'pesquisas:colaborador_importar_descartar' importacao.pk %}">
+
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+        <div class="contadores" aria-live="polite">
+            <div class="contador valido"><strong id="qtdValidos">{{ validos }}</strong> Válidos</div>
+            <div class="contador erro{% if not estado.com_erro %} zerado{% endif %}"><strong id="qtdErros">{{ estado.com_erro }}</strong> Com erro</div>
+        </div>
+        <div class="ms-auto d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-danger" id="btnDescartarErros" {% if not estado.com_erro %}disabled{% endif %}>
+                <i class="bi bi-trash3"></i> Descartar linhas com erro
+            </button>
+            <form method="post" action="{% url 'pesquisas:colaborador_importar_cancelar' importacao.pk %}"
+                  onsubmit="return confirm('Cancelar a importação? As correções feitas aqui serão perdidas.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-light">Cancelar</button>
+            </form>
+            <form method="post" action="{% url 'pesquisas:colaborador_importar_confirmar' importacao.pk %}" id="formConfirmar">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary" id="btnConfirmar" {% if not validos %}disabled{% endif %}>
+                    <i class="bi bi-check2-circle"></i> Importar <span id="qtdConfirmar">{{ validos }}</span> linha(s) válida(s)
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {% if importacao.colunas_ignoradas %}
+    <div class="alert alert-secondary py-2 small">
+        <i class="bi bi-info-circle"></i> Colunas ignoradas (não reconhecidas): {{ importacao.colunas_ignoradas|join:", " }}.
+    </div>
+    {% endif %}
+
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link{% if estado.com_erro %} active{% endif %}" id="aba-erros" data-bs-toggle="tab" data-bs-target="#painel-erros" type="button" role="tab">
+                <i class="bi bi-exclamation-triangle text-danger"></i> Registros com erro <span class="badge text-bg-danger" id="badgeErros">{{ estado.com_erro }}</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link{% if not estado.com_erro %} active{% endif %}" id="aba-validos" data-bs-toggle="tab" data-bs-target="#painel-validos" type="button" role="tab">
+                <i class="bi bi-check-circle text-success"></i> Registros válidos <span class="badge text-bg-success" id="badgeValidos">{{ validos }}</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade{% if estado.com_erro %} show active{% endif %}" id="painel-erros" role="tabpanel">
+            <div id="dica" class="small text-muted px-1 py-2">
+                Clique numa célula em vermelho e corrija o valor. <kbd>Enter</kbd> salva e vai para o próximo erro, <kbd>Esc</kbd> desfaz, <kbd>↑</kbd> <kbd>↓</kbd> mudam de linha.
+            </div>
+            <div class="tabela-rolagem">
+                <table class="table planilha">
+                    <thead>
+                        <tr>
+                            <th class="num">Linha</th>
+                            {% for coluna in colunas %}<th class="col-{{ coluna.chave }}">{{ coluna.rotulo }}</th>{% endfor %}
+                            <th><span class="visually-hidden">Ações</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoErros"></tbody>
+                </table>
+                <div class="vazio" id="semErros" hidden>
+                    <i class="bi bi-check2-all fs-3 d-block text-success mb-2"></i>
+                    Nenhuma linha com erro. Confira os registros válidos e clique em <strong>Importar</strong>.
+                </div>
+            </div>
+        </div>
+        <div class="tab-pane fade{% if not estado.com_erro %} show active{% endif %}" id="painel-validos" role="tabpanel">
+            <div class="small text-muted px-1 py-2">Estas linhas passaram na validação e serão gravadas ao confirmar a importação.</div>
+            <div class="tabela-rolagem">
+                <table class="table planilha">
+                    <thead>
+                        <tr>
+                            <th class="num">Linha</th>
+                            {% for coluna in colunas %}<th class="col-{{ coluna.chave }}">{{ coluna.rotulo }}</th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody id="corpoValidos"></tbody>
+                </table>
+                <div class="vazio" id="semValidos" hidden>Nenhuma linha válida ainda.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ importacao.linhas|json_script:"dados-linhas" }}
+{{ estado.erros|json_script:"dados-erros" }}
+{{ colunas|json_script:"dados-colunas" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+    const raiz = document.getElementById('importacao');
+    const csrfToken = '{{ csrf_token }}';
+    const colunas = JSON.parse(document.getElementById('dados-colunas').textContent);
+    const linhas = new Map(JSON.parse(document.getElementById('dados-linhas').textContent).map(l => [l.numero, l]));
+    let erros = JSON.parse(document.getElementById('dados-erros').textContent);
+
+    const corpoErros = document.getElementById('corpoErros');
+    const corpoValidos = document.getElementById('corpoValidos');
+    const dica = document.getElementById('dica');
+    const dicaPadrao = dica.innerHTML;
+    const LINHA = '';  // chave dos erros que valem para a linha inteira
+
+    // Requisições em fila: as edições chegam ao servidor na ordem em que foram feitas.
+    let fila = Promise.resolve();
+    function enviar(url, corpo) {
+        const requisicao = fila.then(async () => {
+            const resposta = await fetch(url, {
+                method: 'POST',
+                headers: {'X-CSRFToken': csrfToken, 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                body: JSON.stringify(corpo),
+            });
+            const dados = await resposta.json().catch(() => ({erro: 'Sessão expirada ou resposta inesperada. Recarregue a página.'}));
+            if (!resposta.ok || dados.erro) throw new Error(dados.erro || 'Não foi possível salvar.');
+            return dados;
+        });
+        fila = requisicao.catch(() => {});
+        return requisicao;
+    }
+
+    function mostrarDica(html, tipo) {
+        dica.className = 'small px-1 py-2 ' + (tipo === 'erro' ? 'text-danger' : tipo === 'ok' ? 'text-success' : 'text-muted');
+        dica.innerHTML = html;
+    }
+    const escapar = texto => String(texto).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
+    // ---------- montagem das linhas ----------
+    function linhaValida(linha) {
+        const tr = document.createElement('tr');
+        tr.dataset.numero = linha.numero;
+        tr.innerHTML = `<td class="num">${linha.numero}</td>` +
+            colunas.map(c => `<td class="texto">${escapar(linha.valores[c.chave] || '')}</td>`).join('');
+        return tr;
+    }
+
+    function linhaComErro(linha) {
+        const tr = document.createElement('tr');
+        tr.dataset.numero = linha.numero;
+        tr.className = 'linha-erro';
+        tr.innerHTML = `<td class="num">${linha.numero}<i class="bi bi-exclamation-circle-fill aviso-linha" hidden></i></td>` +
+            colunas.map(c => `<td class="col-${c.chave}"><input type="text" class="celula" data-coluna="${c.chave}"
+                aria-label="${escapar(c.rotulo)} da linha ${linha.numero}" value="${escapar(linha.valores[c.chave] || '')}"></td>`).join('') +
+            `<td class="px-1"><button type="button" class="btn btn-sm btn-link text-danger descartar-linha" title="Descartar esta linha">
+                <i class="bi bi-x-lg"></i><span class="visually-hidden">Descartar linha ${linha.numero}</span></button></td>`;
+        return tr;
+    }
+
+    function inserirEmOrdem(corpo, tr) {
+        const numero = Number(tr.dataset.numero);
+        const seguinte = [...corpo.children].find(outra => Number(outra.dataset.numero) > numero);
+        corpo.insertBefore(tr, seguinte || null);
+    }
+
+    function definirTooltip(elemento, mensagem) {
+        const atual = bootstrap.Tooltip.getInstance(elemento);
+        if (!mensagem) {
+            atual?.dispose();
+            elemento.removeAttribute('data-bs-title');
+            return;
+        }
+        elemento.setAttribute('data-bs-title', mensagem);
+        if (atual) atual.setContent({'.tooltip-inner': mensagem});
+        else new bootstrap.Tooltip(elemento, {trigger: 'hover', placement: 'top', container: 'body'});
+    }
+
+    function marcarErros(tr, errosDaLinha) {
+        tr.querySelectorAll('.celula').forEach(input => {
+            const mensagem = errosDaLinha[input.dataset.coluna];
+            input.classList.toggle('com-erro', Boolean(mensagem));
+            input.setAttribute('aria-invalid', mensagem ? 'true' : 'false');
+            input.dataset.erro = mensagem || '';
+            definirTooltip(input, mensagem);
+        });
+        const aviso = tr.querySelector('.aviso-linha');
+        aviso.hidden = !errosDaLinha[LINHA];
+        definirTooltip(aviso, errosDaLinha[LINHA]);
+    }
+
+    // Coloca cada linha na tabela certa e atualiza destaques e contadores.
+    function aplicarEstado(estado) {
+        erros = estado.erros;
+        const focado = document.activeElement;
+        const linhaFocada = focado?.closest?.('#corpoErros tr');
+        const corrigidas = [];
+
+        for (const [numero, linha] of linhas) {
+            const errosDaLinha = erros[numero];
+            const naTabelaDeErros = corpoErros.querySelector(`tr[data-numero="${numero}"]`);
+            const naTabelaDeValidos = corpoValidos.querySelector(`tr[data-numero="${numero}"]`);
+            if (errosDaLinha) {
+                naTabelaDeValidos?.remove();
+                const tr = naTabelaDeErros || linhaComErro(linha);
+                if (!naTabelaDeErros) inserirEmOrdem(corpoErros, tr);
+                marcarErros(tr, errosDaLinha);
+            } else {
+                if (naTabelaDeErros) {
+                    naTabelaDeErros.querySelectorAll('[data-bs-title]').forEach(el => definirTooltip(el, null));
+                    naTabelaDeErros.remove();
+                    corrigidas.push(numero);
+                }
+                if (!naTabelaDeValidos) {
+                    const tr = linhaValida(linha);
+                    if (naTabelaDeErros) tr.classList.add('recem-corrigida');
+                    inserirEmOrdem(corpoValidos, tr);
+                }
+            }
+        }
+        atualizarContadores(estado);
+
+        // Se a linha em edição saiu da tabela de erros, segue para o próximo erro.
+        if (linhaFocada && !linhaFocada.isConnected) focarProximoErro(null);
+        return corrigidas;
+    }
+
+    function atualizarContadores(estado) {
+        const comErro = estado.com_erro, validos = estado.total - estado.com_erro;
+        document.getElementById('qtdErros').textContent = comErro;
+        document.getElementById('badgeErros').textContent = comErro;
+        document.getElementById('qtdValidos').textContent = validos;
+        document.getElementById('badgeValidos').textContent = validos;
+        document.getElementById('qtdConfirmar').textContent = validos;
+        document.querySelector('.contador.erro').classList.toggle('zerado', comErro === 0);
+        document.getElementById('btnDescartarErros').disabled = comErro === 0;
+        document.getElementById('btnConfirmar').disabled = validos === 0;
+        document.getElementById('semErros').hidden = comErro > 0;
+        document.getElementById('semValidos').hidden = validos > 0;
+    }
+
+    // ---------- edição inline ----------
+    function focarProximoErro(depoisDe) {
+        const celulas = [...corpoErros.querySelectorAll('.celula')];
+        const inicio = depoisDe ? celulas.indexOf(depoisDe) + 1 : 0;
+        const proxima = celulas.slice(inicio).find(c => c.classList.contains('com-erro'))
+            || celulas.find(c => c.classList.contains('com-erro') && c !== depoisDe)
+            || corpoErros.querySelector('.celula');
+        if (proxima) {
+            proxima.focus();
+            proxima.select();
+        }
+    }
+
+    async function salvar(input) {
+        const valor = input.value.trim();
+        if (valor === (input.dataset.original ?? '')) return;
+        const numero = Number(input.closest('tr').dataset.numero);
+        const coluna = input.dataset.coluna;
+        input.dataset.original = valor;
+        input.classList.add('salvando');
+        try {
+            const estado = await enviar(raiz.dataset.urlCelula, {numero, coluna, valor});
+            linhas.get(numero).valores[coluna] = estado.valor;
+            if (document.activeElement !== input) input.value = estado.valor;
+            const corrigidas = aplicarEstado(estado);
+            if (corrigidas.length) {
+                mostrarDica(`<i class="bi bi-check-circle-fill"></i> ${corrigidas.length === 1 ? 'Linha ' + corrigidas[0] + ' corrigida e movida' : corrigidas.length + ' linhas corrigidas e movidas'} para os registros válidos.`, 'ok');
+            } else if (input.isConnected && (document.activeElement === input || !document.activeElement?.classList.contains('celula'))) {
+                // Atualiza a dica com a nova mensagem, a menos que o usuário já esteja em outra célula.
+                mostrarErroDaCelula(input);
+            }
+        } catch (falha) {
+            input.dataset.original = '';  // permite tentar de novo
+            mostrarDica(`<i class="bi bi-wifi-off"></i> ${escapar(falha.message)}`, 'erro');
+        } finally {
+            input.classList.remove('salvando');
+        }
+    }
+
+    function mostrarErroDaCelula(input) {
+        const tr = input.closest('tr');
+        const rotulo = colunas.find(c => c.chave === input.dataset.coluna).rotulo;
+        const errosDaLinha = erros[tr.dataset.numero] || {};
+        const partes = [];
+        if (input.dataset.erro) partes.push(`<strong>Linha ${tr.dataset.numero} · ${escapar(rotulo)}:</strong> ${escapar(input.dataset.erro)}`);
+        if (errosDaLinha[LINHA]) partes.push(`<strong>Linha ${tr.dataset.numero}:</strong> ${escapar(errosDaLinha[LINHA])}`);
+        if (partes.length) mostrarDica('<i class="bi bi-exclamation-triangle-fill"></i> ' + partes.join(' '), 'erro');
+        else mostrarDica(dicaPadrao, 'neutro');
+    }
+
+    corpoErros.addEventListener('focusin', evento => {
+        const input = evento.target.closest('.celula');
+        if (!input) return;
+        if (input.dataset.original === undefined) input.dataset.original = input.value.trim();
+        mostrarErroDaCelula(input);
+    });
+    corpoErros.addEventListener('focusout', evento => {
+        const input = evento.target.closest('.celula');
+        if (input) salvar(input);
+    });
+    corpoErros.addEventListener('keydown', evento => {
+        const input = evento.target.closest('.celula');
+        if (!input) return;
+        if (evento.key === 'Enter') {
+            evento.preventDefault();
+            salvar(input);
+            focarProximoErro(input);
+        } else if (evento.key === 'Escape') {
+            input.value = input.dataset.original ?? input.value;
+            input.select();
+        } else if (evento.key === 'ArrowDown' || evento.key === 'ArrowUp') {
+            const tr = input.closest('tr');
+            const vizinha = evento.key === 'ArrowDown' ? tr.nextElementSibling : tr.previousElementSibling;
+            const destino = vizinha?.querySelector(`.celula[data-coluna="${input.dataset.coluna}"]`);
+            if (destino) {
+                evento.preventDefault();
+                destino.focus();
+                destino.select();
+            }
+        }
+    });
+
+    // ---------- descarte ----------
+    async function descartar(corpo, mensagemSucesso) {
+        try {
+            await fila;
+            const estado = await enviar(raiz.dataset.urlDescartar, corpo);
+            for (const numero of estado.descartadas) {
+                linhas.delete(numero);
+                document.querySelectorAll(`tr[data-numero="${numero}"]`).forEach(tr => {
+                    tr.querySelectorAll('[data-bs-title]').forEach(el => definirTooltip(el, null));
+                    tr.remove();
+                });
+            }
+            aplicarEstado(estado);
+            mostrarDica(mensagemSucesso(estado.descartadas.length, estado.com_erro), 'neutro');
+        } catch (falha) {
+            mostrarDica(`<i class="bi bi-wifi-off"></i> ${escapar(falha.message)}`, 'erro');
+        }
+    }
+
+    corpoErros.addEventListener('click', evento => {
+        const botao = evento.target.closest('.descartar-linha');
+        if (!botao) return;
+        const numero = Number(botao.closest('tr').dataset.numero);
+        if (!confirm(`Descartar a linha ${numero}? Ela não será importada.`)) return;
+        descartar({numeros: [numero]}, () => `Linha ${numero} descartada.`);
+    });
+
+    document.getElementById('btnDescartarErros').addEventListener('click', () => {
+        const quantidade = Object.keys(erros).length;
+        if (!confirm(`Descartar ${quantidade} linha(s) com erro? Elas não serão importadas.`)) return;
+        descartar({com_erro: true}, (descartadas, restantes) =>
+            `${descartadas} linha(s) com erro descartada(s).` +
+            (restantes ? ` <strong class="text-danger">${restantes} linha(s) passaram a ter erro por depender das descartadas (ex.: gestor).</strong>` : ''));
+    });
+
+    // ---------- confirmação ----------
+    const formConfirmar = document.getElementById('formConfirmar');
+    formConfirmar.addEventListener('submit', async evento => {
+        evento.preventDefault();
+        if (document.activeElement?.classList.contains('celula')) document.activeElement.blur();
+        const botao = document.getElementById('btnConfirmar');
+        botao.disabled = true;
+        await fila;  // espera as últimas correções chegarem ao servidor
+        const comErro = Object.keys(erros).length;
+        const validos = linhas.size - comErro;
+        const mensagem = comErro
+            ? `Importar ${validos} linha(s) válida(s)? As ${comErro} linha(s) com erro não serão importadas.`
+            : `Importar ${validos} linha(s)?`;
+        if (validos > 0 && confirm(mensagem)) {
+            botao.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+            formConfirmar.submit();
+        } else {
+            botao.disabled = validos === 0;
+        }
+    });
+
+    // ---------- montagem inicial ----------
+    aplicarEstado({erros, total: linhas.size, com_erro: Object.keys(erros).length});
+    corpoValidos.querySelectorAll('.recem-corrigida').forEach(tr => tr.classList.remove('recem-corrigida'));
+})();
+</script>
+{% endblock %}

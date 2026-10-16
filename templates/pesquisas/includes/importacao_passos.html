@@ -1,0 +1,20 @@
+<ol class="passos-importacao" aria-label="Etapas da importação">
+    <li class="{% if passo > 1 %}feito{% else %}atual{% endif %}" {% if passo == 1 %}aria-current="step"{% endif %}>
+        <span class="passo-numero">{% if passo > 1 %}<i class="bi bi-check-lg"></i>{% else %}1{% endif %}</span> Upload
+    </li>
+    <li class="{% if passo > 2 %}feito{% elif passo == 2 %}atual{% endif %}" {% if passo == 2 %}aria-current="step"{% endif %}>
+        <span class="passo-numero">{% if passo > 2 %}<i class="bi bi-check-lg"></i>{% else %}2{% endif %}</span> Revisão e correção
+    </li>
+    <li class="{% if passo == 3 %}atual{% endif %}" {% if passo == 3 %}aria-current="step"{% endif %}>
+        <span class="passo-numero">3</span> Confirmação
+    </li>
+</ol>
+<style>
+    .passos-importacao { display: flex; flex-wrap: wrap; gap: .25rem 1.5rem; list-style: none; padding: 0; margin: 0 0 1.25rem; font-size: .9rem; color: var(--bs-secondary-color); }
+    .passos-importacao li { display: flex; align-items: center; gap: .5rem; }
+    .passos-importacao li + li::before { content: ''; width: 2rem; height: 1px; background: var(--bs-border-color); margin-right: 1rem; }
+    .passos-importacao .passo-numero { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid var(--bs-border-color); font-weight: 600; font-size: .8rem; }
+    .passos-importacao li.atual { color: var(--bs-body-color); font-weight: 600; }
+    .passos-importacao li.atual .passo-numero { background: var(--bs-primary); border-color: var(--bs-primary); color: #fff; }
+    .passos-importacao li.feito .passo-numero { background: var(--bs-success-bg-subtle); border-color: var(--bs-success); color: var(--bs-success); }
+</style>

@@ -2,6 +2,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from notificacoes.models import Notificacao
 from pesquisas.models import Colaborador, Empresa, User
 from pesquisas.test_utils import criar_usuario
 
@@ -13,7 +14,7 @@ class FluxoDesligamentoTests(TestCase):
         self.staff = criar_usuario('admin', password='senha-forte-123', administrador=True)
         self.empresa = Empresa.objects.create(nome='Empresa Teste')
         self.colaborador = Colaborador.objects.create(
-            nome='Fulano de Tal', documento='52998224725', empresa=self.empresa, ativo=True,
+            nome='Fulano de Tal', documento='52998224725', empresas=[self.empresa], ativo=True,
         )
         self.formulario = FormularioDesligamento.objects.create(
             nome='Desligamento - Iniciativa da empresa',
@@ -46,7 +47,7 @@ class FluxoDesligamentoTests(TestCase):
         client.force_login(self.staff)
         response = client.post(
             reverse('pesquisas:colaborador_status', args=[self.colaborador.pk]),
-            {'iniciativa': 'EMPRESA', 'formulario_id': self.formulario.pk},
+            {'iniciativa': 'EMPRESA', 'formulario_id': self.formulario.pk, 'data_demissao': '2026-10-01'},
         )
         self.assertEqual(response.status_code, 302)
         self.colaborador.refresh_from_db()
@@ -128,3 +129,65 @@ class FluxoDesligamentoTests(TestCase):
         self.colaborador.refresh_from_db()
         self.assertTrue(self.colaborador.ativo)
         self.assertFalse(Desligamento.objects.filter(colaborador=self.colaborador).exists())
+
+
+class AvisoEnvioFormularioTests(TestCase):
+    """Ao inativar, o RH é avisado no sininho para enviar o formulário de desligamento."""
+
+    def setUp(self):
+        self.rh = criar_usuario('rh.desligamento', modulos=['desligamentos'])
+        self.sem_acesso = criar_usuario('so.enps', modulos=['enps'])
+        self.empresa = Empresa.objects.create(nome='Empresa Teste')
+        self.colaborador = Colaborador.objects.create(nome='Fulano de Tal', documento='52998224725', empresas=[self.empresa])
+        self.formulario = FormularioDesligamento.objects.create(
+            nome='Desligamento - Empresa', iniciativa=FormularioDesligamento.Iniciativa.EMPRESA, criado_por=self.rh,
+        )
+        self.client.force_login(self.rh)
+
+    def avisos(self, usuario):
+        return list(Notificacao.objects.filter(destinatario=usuario, lida=False).values_list('mensagem', flat=True))
+
+    def inativar(self):
+        self.client.post(
+            reverse('pesquisas:colaborador_status', args=[self.colaborador.pk]),
+            {'iniciativa': 'EMPRESA', 'formulario_id': self.formulario.pk, 'data_demissao': '2026-10-01'},
+        )
+        return Desligamento.objects.get(colaborador=self.colaborador)
+
+    def test_inativar_avisa_quem_acessa_desligamentos(self):
+        desligamento = self.inativar()
+        self.assertEqual(
+            self.avisos(self.rh), ['Enviar o formulário de desligamento "Desligamento - Empresa" para Fulano de Tal.'],
+        )
+        self.assertEqual(self.avisos(self.sem_acesso), [])
+        aviso = Notificacao.objects.get(destinatario=self.rh)
+        self.assertEqual(aviso.link, f"{reverse('desligamentos:kanban')}#desligamento-{desligamento.pk}")
+
+    def test_marcar_como_enviado_encerra_o_aviso(self):
+        desligamento = self.inativar()
+        self.client.post(reverse('desligamentos:desligamento_marcar_enviado', args=[desligamento.pk]))
+        self.assertEqual(self.avisos(self.rh), [])
+
+    def test_reativar_encerra_o_aviso(self):
+        self.inativar()
+        self.client.post(reverse('pesquisas:colaborador_status', args=[self.colaborador.pk]))
+        self.colaborador.refresh_from_db()
+        self.assertTrue(self.colaborador.ativo)
+        self.assertEqual(self.avisos(self.rh), [])
+
+
+class ModalInativacaoNaEdicaoTests(TestCase):
+    def test_edicao_de_colaborador_ativo_traz_iniciativas_e_formularios(self):
+        rh = criar_usuario('rh.modal', modulos=['geral', 'desligamentos'])
+        empresa = Empresa.objects.create(nome='Empresa Teste')
+        colaborador = Colaborador.objects.create(nome='Fulano', documento='52998224725', empresas=[empresa])
+        FormularioDesligamento.objects.create(
+            nome='Pedido de demissão', iniciativa=FormularioDesligamento.Iniciativa.COLABORADOR, criado_por=rh,
+        )
+        self.client.force_login(rh)
+        resposta = self.client.get(reverse('pesquisas:colaborador_editar', args=[colaborador.pk]))
+        self.assertContains(resposta, 'id="colaboradorForm"')
+        self.assertContains(resposta, 'id="motivoModal"')
+        self.assertContains(resposta, 'Iniciativa da empresa')
+        self.assertContains(resposta, 'Iniciativa do colaborador')
+        self.assertContains(resposta, 'Pedido de demissão')

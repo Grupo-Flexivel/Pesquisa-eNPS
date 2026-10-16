@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}Avaliação de experiência · {{ colaborador.nome }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .opcao-row { display: block; border: 1px solid #dee2e6; border-radius: .6rem; padding: .65rem .9rem;
+                 margin-bottom: .5rem; cursor: pointer; }
+    .opcao-row input { margin-right: .6rem; }
+    .opcao-row:has(input:checked) { border-color: #003d3d; background: rgba(0, 61, 61, .06); }
+    .nota-row { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 2.75rem;
+                border: 1px solid #003d3d; border-radius: .5rem; padding: .4rem .7rem; margin: 0 .35rem .35rem 0;
+                color: #003d3d; cursor: pointer; }
+    .nota-row input { position: absolute; opacity: 0; pointer-events: none; }
+    .nota-row:has(input:checked) { background: #003d3d; color: #fff; }
+    .nota-row:has(input:focus-visible) { outline: 2px solid #003d3d; outline-offset: 2px; }
+    .decisao-row { display: flex; align-items: center; gap: .6rem; border: 2px solid #dee2e6; border-radius: .8rem;
+                   padding: .9rem 1rem; cursor: pointer; height: 100%; }
+    .decisao-row input { margin: 0; }
+    .decisao-row.efetivar:has(input:checked) { border-color: #198754; background: rgba(25, 135, 84, .07); }
+    .decisao-row.desligar:has(input:checked) { border-color: #dc3545; background: rgba(220, 53, 69, .07); }
+    .avaliacao-descricao :last-child { margin-bottom: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+    <div>
+        <h1 class="h3 mb-1">Avaliação de experiência</h1>
+        <p class="text-secondary mb-0">
+            {{ colaborador.nome }} · {{ colaborador.nomes_empresas }} ·
+            Contratação em {{ colaborador.data_contratacao|date:'d/m/Y'|default:'—' }} ·
+            Fim da experiência em {{ periodo.fim_experiencia|date:'d/m/Y'|default:'—' }}
+        </p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'experiencia:kanban' %}"><i class="bi bi-arrow-left"></i> Voltar ao Kanban</a>
+</div>
+
+<div class="card p-4" style="max-width: 900px;">
+    {% if resposta %}
+        <div class="alert alert-success">Esta avaliação já foi respondida.</div>
+        {% include 'experiencia/_respostas.html' %}
+    {% elif indisponivel %}
+        <div class="alert alert-warning mb-0">{{ indisponivel }}</div>
+    {% else %}
+        <h2 class="h4 mb-2">{{ formulario.titulo }}</h2>
+        {% if formulario.descricao %}
+            {# A descrição é sanitizada ao salvar (experiencia.sanitizacao.limpar_html). #}
+            <div class="avaliacao-descricao mb-3">{{ formulario.descricao|safe }}</div>
+        {% endif %}
+        <hr>
+
+        <form method="post" novalidate id="formAvaliacao">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {% for pergunta, campo in form.perguntas_com_campo %}
+                <fieldset class="mb-4 {% if not forloop.last %}border-bottom pb-3{% endif %}">
+                    <legend class="form-label fw-semibold fs-6">{{ forloop.counter }}. {{ pergunta.texto_pergunta }}</legend>
+                    {% if pergunta.tipo_resposta == 'NOTA_0_10' %}
+                        <div class="d-flex flex-wrap">
+                            {% for nota in campo %}
+                                <label class="nota-row">{{ nota.tag }} {{ nota.choice_label }}</label>
+                            {% endfor %}
+                        </div>
+                    {% elif pergunta.tipo_resposta == 'RADIO' or pergunta.tipo_resposta == 'CHECKBOX' %}
+                        {% if pergunta.tipo_resposta == 'CHECKBOX' %}<div class="small text-secondary mb-2">Selecione uma ou mais opções.</div>{% endif %}
+                        {% for opcao in campo %}
+                            <label class="opcao-row">{{ opcao.tag }} {{ opcao.choice_label }}</label>
+                        {% endfor %}
+                    {% else %}
+                        {{ campo }}
+                    {% endif %}
+                    <div class="text-danger small">{{ campo.errors }}</div>
+                </fieldset>
+            {% endfor %}
+
+            <hr>
+            <fieldset class="mb-3">
+                <legend class="form-label fw-semibold fs-5">{{ form.decisao.label }} <span class="text-danger">*</span></legend>
+                <div class="row g-2">
+                    {% for opcao in form.decisao %}
+                        <div class="col-md-6">
+                            <label class="decisao-row {% if opcao.data.value == 'EFETIVADO' %}efetivar{% else %}desligar{% endif %}">
+                                {{ opcao.tag }}
+                                <span>
+                                    <span class="fw-semibold d-block">{{ opcao.choice_label }}</span>
+                                    <span class="small text-secondary">
+                                        {% if opcao.data.value == 'EFETIVADO' %}O colaborador é aprovado e o RH é avisado para incluir os benefícios.{% else %}O colaborador não é aprovado e o RH é avisado para iniciar o desligamento.{% endif %}
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="text-danger small">{{ form.decisao.errors }}</div>
+            </fieldset>
+
+            <div class="mb-3">
+                {{ form.observacoes.label_tag }}
+                {{ form.observacoes }}
+                <div class="text-danger small">{{ form.observacoes.errors }}</div>
+            </div>
+
+            <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i> Enviar avaliação</button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('formAvaliacao')?.addEventListener('submit', event => {
+        const decisao = document.querySelector('input[name="decisao"]:checked');
+        if (!decisao) return;  // o servidor exibe o erro de campo obrigatório
+        const acao = decisao.value === 'EFETIVADO' ? 'EFETIVAR' : 'DESLIGAR';
+        if (!confirm(`Confirma o envio da avaliação com a decisão de ${acao} {{ colaborador.nome|escapejs }}? Após o envio, a avaliação não poderá ser alterada.`)) {
+            event.preventDefault();
+        }
+    });
+</script>
+{% endblock %}

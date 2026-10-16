@@ -7,8 +7,8 @@
     .external-wrap {
         background-image: 
             linear-gradient(
-                rgba(0, 75, 70, 0.55),
-                rgba(0, 75, 70, 0.55)
+                rgba(0, 61, 61, 0.55),
+                rgba(0, 61, 61, 0.55)
             ),
             url("{% static 'pesquisas/img/background.jpg' %}") !important;
 
@@ -27,7 +27,7 @@
     
     .login-container {
         width: 100%;
-        max-width: 500px;
+        max-width: 460px;
         margin: 0 auto;
     }
 
@@ -35,39 +35,104 @@
         max-width: 220px;
         height: auto;
         display: block;
-        margin: 0 auto 1.75rem auto;
+        margin: 0 auto 1rem auto;
+    }
+
+    .login-chamada {
+        text-align: center;
+        color: #7fd1b9;
+        font-weight: 600;
+        font-size: 1.05rem;
+        margin-bottom: 1.25rem;
     }
 
     .login-card {
-        padding: 3rem 2.5rem !important;
+        background-color: #edf5f5 !important;
+        border: none !important;
+        border-radius: 24px !important;
+        padding: 1.75rem 2rem 1.5rem !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    .login-card h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1b2430;
+        margin-bottom: 0.4rem;
+    }
+
+    .login-card .login-subtitulo {
+        color: #5b6470;
+        font-size: 1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .login-card .form-label {
+        font-weight: 600;
+        color: #1b2430;
+        margin-bottom: 0.4rem;
+    }
+
+    .login-input {
+        height: 48px;
+        border-radius: 12px !important;
+        border: 1px solid #d5dde3 !important;
+        background-color: #fff !important;
+        padding: 0 1.25rem !important;
+        font-size: 1rem;
+        color: #1b2430;
+    }
+
+    .login-input::placeholder {
+        color: #9aa4b2;
+    }
+
+    .login-input:focus {
+        border-color: #00594f !important;
+        box-shadow: 0 0 0 0.2rem rgba(0, 89, 79, 0.15) !important;
+    }
+
+    .senha-wrap {
+        position: relative;
+    }
+
+    .senha-wrap .login-input {
+        padding-right: 3.25rem !important;
     }
 
     .password-toggle-btn {
+        position: absolute;
+        top: 50%;
+        right: 0.9rem;
+        transform: translateY(-50%);
+        background: transparent;
+        border: none;
+        padding: 0.25rem;
+        color: #5b6470;
         cursor: pointer;
-        background-color: transparent;
-        color: #6c757d;
-        border-color: #dee2e6;
-        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
     }
 
     .password-toggle-btn:hover,
     .password-toggle-btn:focus {
-        background-color: transparent;
-        color: #343a40;
-        box-shadow: none;
+        color: #1b2430;
+        outline: none;
     }
 
-    /* Remove o contorno duplicado no input group ao focar */
-    .input-group:focus-within {
-        border-color: #86b7fe;
-        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-        border-radius: 0.375rem;
+    .login-btn {
+        height: 48px;
+        border-radius: 12px !important;
+        background-color: #003c38 !important;
+        border: none !important;
+        color: #fff !important;
+        font-weight: 700;
+        font-size: 1rem;
     }
 
-    .input-group:focus-within .form-control,
-    .input-group:focus-within .password-toggle-btn {
-        border-color: #86b7fe !important;
-        box-shadow: none !important;
+    .login-btn:hover,
+    .login-btn:focus {
+        background-color: #00594f !important;
     }
 </style>
 {% endblock %}
@@ -76,11 +141,12 @@
 <div class="login-container">
     <!-- Logo da empresa centralizada -->
     <img src="{% static 'pesquisas/img/logo-grupo-flexivel.png' %}" alt="Grupo Flexível" class="login-logo">
+    <p class="login-chamada">Faça login para acessar o sistema.</p>
 
     <!-- Card de login centralizado -->
-    <div class="card login-card shadow-lg">
-        <h1 class="h2 mb-1">Painel eNPS</h1>
-        <p class="text-secondary mb-4">Acesso exclusivo para a equipe administrativa.</p>
+    <div class="card login-card">
+        <h1>Painel RH</h1>
+        <p class="login-subtitulo">Acesso exclusivo para a equipe administrativa.</p>
         <form method="post">
             {% csrf_token %}
             {% if form.non_field_errors %}
@@ -88,26 +154,26 @@
                     {% for error in form.non_field_errors %}{{ error }}{% endfor %}
                 </div>
             {% endif %}
-            <div class="mb-4">
+            <div class="mb-3">
                 <label class="form-label" for="id_username">Usuário</label>
-                <input class="form-control form-control-lg" type="text" name="username" autofocus required id="id_username">
+                <input class="form-control login-input" type="text" name="username" placeholder="Digite seu usuário" autofocus required id="id_username">
             </div>
-            <div class="mb-4">
+            <div class="mb-3">
                 <label class="form-label" for="id_password">Senha</label>
-                <div class="input-group">
-                    <input class="form-control form-control-lg border-end-0" type="password" name="password" required id="id_password">
-                    <button class="btn btn-outline-secondary password-toggle-btn px-3 border-start-0 d-flex align-items-center justify-content: center" type="button" id="togglePassword" tabindex="-1" aria-label="Mostrar senha">
-                        <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <div class="senha-wrap">
+                    <input class="form-control login-input" type="password" name="password" placeholder="Digite sua senha" required id="id_password">
+                    <button class="password-toggle-btn" type="button" id="togglePassword" tabindex="-1" aria-label="Mostrar senha">
+                        <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M2.46 12C3.73 7.94 7.52 5 12 5c4.48 0 8.27 2.94 9.54 7-1.27 4.06-5.06 7-9.54 7-4.48 0-8.27-2.94-9.54-7Z"/>
                             <circle cx="12" cy="12" r="3"/>
                         </svg>
-                        <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="d-none" aria-hidden="true">
+                        <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="d-none" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m3 3 18 18M10.58 10.58A2 2 0 0 0 13.42 13.42M9.88 5.08A10.94 10.94 0 0 1 12 5c4.48 0 8.27 2.94 9.54 7a11.8 11.8 0 0 1-2.16 3.65M6.23 6.23A11.88 11.88 0 0 0 2.46 12C3.73 16.06 7.52 19 12 19c1.61 0 3.14-.38 4.5-1.05"/>
                         </svg>
                     </button>
                 </div>
             </div>
-            <button class="btn btn-primary btn-lg w-100 text-white mt-2" type="submit">Entrar</button>
+            <button class="btn login-btn w-100 mt-2" type="submit">Entrar no Sistema</button>
         </form>
     </div>
 </div>

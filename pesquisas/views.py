@@ -1,16 +1,21 @@
+import csv
+import json
+from datetime import timedelta
+
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.db.models import Count, ProtectedError, Q
-from django.http import Http404
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 from django.core.exceptions import PermissionDenied, ValidationError
 
 from desligamentos.models import FormularioDesligamento, RespostaDesligamento
 
-from .forms import ColaboradorForm, PerfilAcessoForm, PerguntaFormSet, PesquisaForm, ResponderPerguntaForm, ValidarCPFForm
-from .models import Colaborador, DetalheResposta, Empresa, PerfilAcesso, Pergunta, Pesquisa, RespostaPesquisa
+from .forms import ColaboradorForm, ImportarColaboradoresForm, PerfilAcessoForm, PerguntaFormSet, PesquisaForm, ResponderPerguntaForm, ValidarCPFForm
+from .models import Colaborador, DetalheResposta, Empresa, ImportacaoColaboradores, PerfilAcesso, Pergunta, Pesquisa, RespostaPesquisa
 from .permissoes import DESLIGAMENTOS, ENPS, GERAL, administrador_required, modulo_required, pagina_inicial, usuario_tem_acesso
 from .services import gerar_hash_documento
 
@@ -71,26 +76,65 @@ def dashboard(request):
     return render(request, 'pesquisas/dashboard.html', contexto)
 
 
-@modulo_required(GERAL)
-def colaborador_lista(request):
+def _aplicar_desligamento(colaborador, iniciativa, formulario, usuario):
+    """Depois de gravada a data de demissão: agenda (data futura) ou inativa já (até hoje).
+
+    Sem `iniciativa`/`formulario`, mantém o motivo do desligamento já agendado.
+    Devolve a mensagem para o usuário.
+    """
+    from desligamentos.services import (
+        agendar_desligamento, desligamento_agendado, efetivar_desligamento, registrar_desligamento_pendente,
+    )
+
+    if colaborador.data_demissao > timezone.localdate():
+        agendar_desligamento(colaborador, iniciativa, formulario, usuario)
+        return (
+            f'Desligamento agendado: {colaborador.nome} continua ativo e será inativado em '
+            f'{colaborador.data_demissao:%d/%m/%Y}, quando o card irá para "Pendentes" no Kanban de desligamentos.'
+        )
+
+    colaborador.ativo = False
+    colaborador.data_inativacao = timezone.now()
+    colaborador.save()
+    agendado = desligamento_agendado(colaborador)
+    if agendado:
+        efetivar_desligamento(agendado, iniciativa, formulario)
+    else:
+        registrar_desligamento_pendente(colaborador, iniciativa, formulario, usuario)
+    return f'{colaborador.nome} agora está inativo. Um card foi criado na coluna "Pendentes" do Kanban de desligamentos.'
+
+
+def _filtrar_colaboradores(request):
+    """Aplica os filtros da listagem (busca, empresa e status); usados também na exportação."""
     termo = request.GET.get('q', '').strip()
     empresa_id = request.GET.get('empresa', '').strip()
     status = request.GET.get('status', '').strip()
-    
-    colaboradores = Colaborador.objects.select_related('empresa', 'usuario')
-    
+
+    colaboradores = Colaborador.objects.select_related('usuario').prefetch_related('empresas')
+
     if termo:
         colaboradores = colaboradores.filter(
-            Q(nome__icontains=termo) | Q(documento__icontains=termo) | Q(empresa__nome__icontains=termo)
-        )
-        
-    if empresa_id:
-        colaboradores = colaboradores.filter(empresa_id=empresa_id)
-        
+            Q(nome__icontains=termo) | Q(documento__icontains=termo) | Q(empresas__nome__icontains=termo)
+        ).distinct()
+
+    if empresa_id.isdigit():
+        colaboradores = colaboradores.filter(empresas=empresa_id).distinct()
+
     if status == 'ativo':
         colaboradores = colaboradores.filter(ativo=True)
     elif status == 'inativo':
         colaboradores = colaboradores.filter(ativo=False)
+
+    return colaboradores, termo, empresa_id, status
+
+
+@modulo_required(GERAL)
+def colaborador_lista(request):
+    from desligamentos.services import processar_desligamentos_agendados
+
+    # Além da rotina de hora em hora: quem chegou à data de demissão já aparece inativo.
+    processar_desligamentos_agendados()
+    colaboradores, termo, empresa_id, status = _filtrar_colaboradores(request)
 
     return render(request, 'pesquisas/colaborador_lista.html', {
         'colaboradores': colaboradores,
@@ -102,66 +146,274 @@ def colaborador_lista(request):
     })
 
 
-@modulo_required(ENPS, DESLIGAMENTOS)
+COLUNAS_EXPORTACAO = (
+    'Nome', 'CPF / CNPJ', 'Empresas', 'Status', 'Celulares', 'E-mail', 'Data de nascimento',
+    'Data de contratação', 'Data de demissão', 'É gestor', 'Gestor responsável',
+)
+
+
+@modulo_required(GERAL)
+def colaborador_exportar(request):
+    """Exporta os colaboradores da listagem, respeitando os filtros aplicados, em XLSX (padrão) ou CSV."""
+    from desligamentos.services import processar_desligamentos_agendados
+
+    processar_desligamentos_agendados()
+    colaboradores, *_ = _filtrar_colaboradores(request)
+    colaboradores = colaboradores.select_related('gestor')
+    linhas = [
+        [
+            c.nome, c.documento, c.nomes_empresas, 'Ativo' if c.ativo else 'Inativo',
+            ' / '.join(c.celulares or []), c.email, c.data_nascimento, c.data_contratacao, c.data_demissao,
+            'Sim' if c.eh_gestor else 'Não', c.gestor.nome if c.gestor else '',
+        ]
+        for c in colaboradores
+    ]
+    nome_arquivo = f'colaboradores_{timezone.localdate():%Y-%m-%d}'
+
+    if request.GET.get('formato') == 'csv':
+        resposta = HttpResponse(content_type='text/csv; charset=utf-8')
+        resposta['Content-Disposition'] = f'attachment; filename="{nome_arquivo}.csv"'
+        resposta.write('﻿')  # BOM: o Excel abre com acentos corretos
+        writer = csv.writer(resposta, delimiter=';')
+        writer.writerow(COLUNAS_EXPORTACAO)
+        for linha in linhas:
+            writer.writerow([valor.strftime('%d/%m/%Y') if hasattr(valor, 'strftime') else valor for valor in linha])
+        return resposta
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    pasta = Workbook()
+    planilha = pasta.active
+    planilha.title = 'Colaboradores'
+    planilha.append(COLUNAS_EXPORTACAO)
+    for celula in planilha[1]:
+        celula.font = Font(bold=True)
+    for linha in linhas:
+        planilha.append(linha)
+    for coluna in ('G', 'H', 'I'):
+        for celula in planilha[coluna][1:]:
+            celula.number_format = 'DD/MM/YYYY'
+    # CPF/CNPJ como texto, para o Excel não remover zeros à esquerda.
+    for celula in planilha['B'][1:]:
+        celula.number_format = '@'
+    for indice, largura in enumerate((35, 18, 30, 10, 30, 30, 18, 18, 18, 10, 30), start=1):
+        planilha.column_dimensions[planilha.cell(row=1, column=indice).column_letter].width = largura
+    planilha.freeze_panes = 'A2'
+    planilha.auto_filter.ref = planilha.dimensions
+
+    resposta = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resposta['Content-Disposition'] = f'attachment; filename="{nome_arquivo}.xlsx"'
+    pasta.save(resposta)
+    return resposta
+
+
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
 def colaborador_criar(request):
     form = ColaboradorForm(request.POST or None, usuario_logado=request.user)
     if request.method == 'POST' and form.is_valid():
         colaborador = form.save()
         colaborador.data_ativacao = timezone.now()
-        colaborador.save(update_fields=['data_ativacao'])
+        # Cadastrado já com data de demissão: entra inativo.
+        colaborador.data_inativacao = None if colaborador.ativo else colaborador.data_ativacao
+        colaborador.save(update_fields=['data_ativacao', 'data_inativacao'])
         messages.success(request, 'Colaborador cadastrado com sucesso.')
         return redirect('pesquisas:colaborador_lista')
     return render(request, 'pesquisas/colaborador_form.html', {'form': form})
 
 
-@modulo_required(ENPS, DESLIGAMENTOS)
-def colaborador_editar(request, pk):
-    from desligamentos.services import cancelar_desligamentos_abertos, registrar_desligamento_pendente
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
+def colaborador_importar(request):
+    """Passo 1 da importação: lê a planilha e guarda as linhas para revisão, sem gravar no cadastro."""
+    from .importacao import ErroImportacao, preparar_linhas
 
-    colaborador = get_object_or_404(Colaborador, pk=pk)
-    estava_ativo = colaborador.ativo
-    form = ColaboradorForm(request.POST or None, instance=colaborador, usuario_logado=request.user)
+    form = ImportarColaboradoresForm(request.POST or None, request.FILES or None)
+    erros = []
     if request.method == 'POST' and form.is_valid():
-        vai_inativar = estava_ativo and not form.cleaned_data['ativo']
-        iniciativa = formulario = None
-        if vai_inativar:
-            iniciativa, formulario = _validar_formulario_desligamento(request)
-            if formulario is None:
-                return render(request, 'pesquisas/colaborador_form.html', {
-                    'form': form, 'colaborador': colaborador, **_formularios_desligamento_por_iniciativa(),
-                })
+        arquivo = form.cleaned_data['arquivo']
+        try:
+            linhas, colunas_ignoradas = preparar_linhas(arquivo.read(), arquivo.name)
+        except ErroImportacao as exc:
+            erros = exc.erros
+        else:
+            # Revisões abandonadas não precisam ficar guardadas.
+            ImportacaoColaboradores.objects.filter(criada_em__lt=timezone.now() - timedelta(days=2)).delete()
+            importacao = ImportacaoColaboradores.objects.create(
+                usuario=request.user, nome_arquivo=arquivo.name[:255], linhas=linhas, colunas_ignoradas=colunas_ignoradas,
+            )
+            return redirect('pesquisas:colaborador_importar_revisao', pk=importacao.pk)
+    return render(request, 'pesquisas/colaborador_importar.html', {'form': form, 'erros': erros})
 
-        with transaction.atomic():
-            colaborador = form.save()
 
-            mudou_status = False
-            if vai_inativar:
-                colaborador.data_inativacao = timezone.now()
-                mudou_status = True
-            elif not estava_ativo and colaborador.ativo:
-                colaborador.data_inativacao = None
-                colaborador.data_ativacao = timezone.now()
-                mudou_status = True
+def _importacao_do_usuario(request, pk):
+    # Cada revisão só é visível para quem enviou a planilha.
+    return get_object_or_404(ImportacaoColaboradores, pk=pk, usuario=request.user)
 
-            if mudou_status:
-                colaborador.save(update_fields=['data_inativacao', 'data_ativacao'])
 
-            if vai_inativar:
-                registrar_desligamento_pendente(colaborador, iniciativa, formulario, request.user)
-            elif not estava_ativo and colaborador.ativo:
-                cancelar_desligamentos_abertos(colaborador)
+def _estado_importacao(importacao):
+    from .importacao import validar_linhas
 
-        messages.success(request, 'Colaborador atualizado com sucesso.')
-        return redirect('pesquisas:colaborador_lista')
-    return render(request, 'pesquisas/colaborador_form.html', {
-        'form': form, 'colaborador': colaborador, **_formularios_desligamento_por_iniciativa(),
+    erros = validar_linhas(importacao.linhas)
+    return {'erros': erros, 'total': len(importacao.linhas), 'com_erro': len(erros)}
+
+
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
+def colaborador_importar_revisao(request, pk):
+    """Passo 2: mostra as linhas válidas e as com erro; as com erro são corrigidas direto na tabela."""
+    from .importacao import COLUNAS, ROTULOS
+
+    importacao = _importacao_do_usuario(request, pk)
+    estado = _estado_importacao(importacao)
+    return render(request, 'pesquisas/colaborador_importar_revisao.html', {
+        'importacao': importacao,
+        'colunas': [{'chave': coluna, 'rotulo': ROTULOS[coluna]} for coluna in COLUNAS],
+        'estado': estado,
+        'validos': estado['total'] - estado['com_erro'],
     })
 
 
-@modulo_required(ENPS, DESLIGAMENTOS)
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
+@require_POST
+def colaborador_importar_celula(request, pk):
+    """Altera uma célula da revisão e devolve a validação de todas as linhas (uma correção pode afetar outras)."""
+    from .importacao import COLUNAS
+
+    importacao = _importacao_do_usuario(request, pk)
+    try:
+        dados = json.loads(request.body)
+        numero, coluna = int(dados['numero']), dados['coluna']
+        valor = ' '.join(str(dados.get('valor') or '').split())[:1000]
+    except (ValueError, KeyError, TypeError):
+        return JsonResponse({'erro': 'Requisição inválida.'}, status=400)
+    if coluna not in COLUNAS:
+        return JsonResponse({'erro': 'Coluna inválida.'}, status=400)
+    linha = next((linha for linha in importacao.linhas if linha['numero'] == numero), None)
+    if linha is None:
+        return JsonResponse({'erro': 'Esta linha não está mais na importação.'}, status=404)
+
+    linha['valores'][coluna] = valor
+    importacao.save(update_fields=['linhas'])
+    return JsonResponse({**_estado_importacao(importacao), 'valor': valor})
+
+
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
+@require_POST
+def colaborador_importar_descartar(request, pk):
+    """Remove linhas da importação: as indicadas em `numeros` ou, com `com_erro`, todas as que têm erro."""
+    from .importacao import validar_linhas
+
+    importacao = _importacao_do_usuario(request, pk)
+    try:
+        dados = json.loads(request.body)
+        if dados.get('com_erro'):
+            numeros = set(validar_linhas(importacao.linhas))
+        else:
+            numeros = {int(numero) for numero in dados.get('numeros', [])}
+    except (ValueError, TypeError, AttributeError):
+        return JsonResponse({'erro': 'Requisição inválida.'}, status=400)
+
+    importacao.linhas = [linha for linha in importacao.linhas if linha['numero'] not in numeros]
+    importacao.save(update_fields=['linhas'])
+    return JsonResponse({**_estado_importacao(importacao), 'descartadas': sorted(numeros)})
+
+
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
+@require_POST
+def colaborador_importar_confirmar(request, pk):
+    """Passo 3: grava no cadastro só as linhas válidas; as com erro ficam de fora."""
+    from .importacao import ErroImportacao, gravar_linhas, validar_linhas
+
+    importacao = _importacao_do_usuario(request, pk)
+    erros = validar_linhas(importacao.linhas)
+    if len(erros) == len(importacao.linhas):
+        messages.error(request, 'Não há linhas válidas para importar.')
+        return redirect('pesquisas:colaborador_importar_revisao', pk=pk)
+    try:
+        with transaction.atomic():
+            resultado = gravar_linhas(importacao.linhas, erros)
+            importacao.delete()
+    except ErroImportacao as exc:
+        messages.error(request, 'Nenhum colaborador foi importado: ' + ' '.join(exc.erros))
+        return redirect('pesquisas:colaborador_importar_revisao', pk=pk)
+
+    mensagem = f'Importação concluída: {resultado.criados} criado(s) e {resultado.atualizados} atualizado(s).'
+    if resultado.ignoradas:
+        mensagem += f' {resultado.ignoradas} linha(s) com erro não foram importadas.'
+    if importacao.colunas_ignoradas:
+        mensagem += f' Colunas ignoradas: {", ".join(importacao.colunas_ignoradas)}.'
+    messages.success(request, mensagem)
+    return redirect('pesquisas:colaborador_lista')
+
+
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
+@require_POST
+def colaborador_importar_cancelar(request, pk):
+    _importacao_do_usuario(request, pk).delete()
+    messages.info(request, 'Importação cancelada. Nenhum colaborador foi alterado.')
+    return redirect('pesquisas:colaborador_importar')
+
+
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
+def colaborador_modelo_importacao(request):
+    from .importacao import COLUNAS_OBRIGATORIAS, COLUNAS_OPCIONAIS
+
+    resposta = HttpResponse(content_type='text/csv; charset=utf-8')
+    resposta['Content-Disposition'] = 'attachment; filename="modelo_importacao_colaboradores.csv"'
+    resposta.write('﻿')  # BOM: o Excel abre com acentos corretos
+    writer = csv.writer(resposta, delimiter=';')
+    writer.writerow(COLUNAS_OBRIGATORIAS + COLUNAS_OPCIONAIS)
+    writer.writerow(['Maria Gestora', '52998224725', 'Matriz', '(47) 99999-8888 / (47) 98888-7777', 'maria@exemplo.com.br',
+                     '20/05/1985', '01/03/2024', '', 'Sim', ''])
+    writer.writerow(['João Silva', '11144477735', 'Matriz', '', '', '', '15/09/2026', '', 'Não', 'Maria Gestora'])
+    return resposta
+
+
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
+def colaborador_editar(request, pk):
+    from desligamentos.services import cancelar_desligamento_agendado, cancelar_desligamentos_abertos, desligamento_agendado
+
+    colaborador = get_object_or_404(Colaborador, pk=pk)
+    estava_ativo = colaborador.ativo
+    agendado = desligamento_agendado(colaborador) if estava_ativo else None
+    form = ColaboradorForm(request.POST or None, instance=colaborador, usuario_logado=request.user)
+    contexto = {
+        'form': form, 'colaborador': colaborador, 'desligamento_agendado': agendado,
+        **_formularios_desligamento_por_iniciativa(),
+    }
+    if request.method == 'POST' and form.is_valid():
+        # Ativo com data de demissão (hoje, passada ou futura) = desligamento. O motivo é pedido uma vez:
+        # se já houver desligamento agendado, só é trocado quando um novo motivo for enviado.
+        desligando = estava_ativo and form.cleaned_data['data_demissao'] is not None
+        iniciativa = formulario = None
+        if desligando and (agendado is None or request.POST.get('iniciativa')):
+            iniciativa, formulario = _validar_formulario_desligamento(request)
+            if formulario is None:
+                return render(request, 'pesquisas/colaborador_form.html', contexto)
+
+        mensagem = 'Colaborador atualizado com sucesso.'
+        with transaction.atomic():
+            colaborador = form.save()
+            if desligando:
+                mensagem = _aplicar_desligamento(colaborador, iniciativa, formulario, request.user)
+            elif agendado:
+                # A data de demissão futura foi apagada.
+                cancelar_desligamento_agendado(colaborador)
+                mensagem = 'Colaborador atualizado. O desligamento agendado foi cancelado.'
+            elif not estava_ativo and colaborador.ativo:
+                colaborador.data_inativacao = None
+                colaborador.data_ativacao = timezone.now()
+                colaborador.save(update_fields=['data_inativacao', 'data_ativacao'])
+                cancelar_desligamentos_abertos(colaborador)
+
+        messages.success(request, mensagem)
+        return redirect('pesquisas:colaborador_lista')
+    return render(request, 'pesquisas/colaborador_form.html', contexto)
+
+
+@modulo_required(GERAL, ENPS, DESLIGAMENTOS)
 @require_POST
 def colaborador_alterar_status(request, pk):
-    from desligamentos.services import cancelar_desligamentos_abertos, registrar_desligamento_pendente
+    from desligamentos.services import cancelar_desligamentos_abertos
 
     colaborador = get_object_or_404(Colaborador, pk=pk)
     agora = timezone.now()
@@ -170,17 +422,25 @@ def colaborador_alterar_status(request, pk):
         iniciativa, formulario = _validar_formulario_desligamento(request)
         if formulario is None:
             return redirect('pesquisas:colaborador_lista')
-        with transaction.atomic():
-            colaborador.ativo = False
-            colaborador.data_inativacao = agora
-            colaborador.save()
-            registrar_desligamento_pendente(colaborador, iniciativa, formulario, request.user)
-        messages.success(
-            request,
-            f'{colaborador.nome} agora está inativo. Um card foi criado na coluna "Pendentes" do Kanban de desligamentos.',
-        )
+        try:
+            data_demissao = parse_date(request.POST.get('data_demissao', '').strip())
+        except ValueError:
+            data_demissao = None
+        if data_demissao is None:
+            messages.error(request, f'Informe a data de demissão para inativar {colaborador.nome}.')
+            return redirect('pesquisas:colaborador_lista')
+        try:
+            with transaction.atomic():
+                colaborador.data_demissao = data_demissao
+                colaborador.save()
+                mensagem = _aplicar_desligamento(colaborador, iniciativa, formulario, request.user)
+        except ValidationError as exc:
+            messages.error(request, ' '.join(exc.messages))
+            return redirect('pesquisas:colaborador_lista')
+        messages.success(request, mensagem)
     else:
         colaborador.ativo = True
+        colaborador.data_demissao = None
         colaborador.data_inativacao = None
         colaborador.data_ativacao = agora
         colaborador.save()
@@ -349,7 +609,7 @@ def resultados(request, pk):
         Q(ativo=False) & Q(data_inativacao__lt=pesquisa.data_inicio)
     )
     if empresa_selecionada:
-        colaboradores_elegiveis = colaboradores_elegiveis.filter(empresa=empresa_selecionada)
+        colaboradores_elegiveis = colaboradores_elegiveis.filter(empresas=empresa_selecionada)
 
     ativos = colaboradores_elegiveis.count()
     hashes_elegiveis = [

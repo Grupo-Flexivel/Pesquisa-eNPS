@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Importar colaboradores{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3">Importar colaboradores</h1>
+{% include "pesquisas/includes/importacao_passos.html" with passo=1 %}
+
+<div class="card p-4 mb-4" style="max-width: 900px;">
+    <p class="mb-2">Envie uma planilha <strong>.csv</strong> ou <strong>.xlsx</strong> com um colaborador por linha. A primeira linha deve ser o cabeçalho; a ordem das colunas não importa.</p>
+    <ul class="small mb-3">
+        <li><strong>Obrigatórias:</strong> <code>nome</code>, <code>documento</code> (CPF ou CNPJ) e <code>empresa</code> (unidade fabril — é criada se ainda não existir).</li>
+        <li><strong>Opcionais:</strong> <code>celular</code> (mais de um número na mesma célula, separados por <code>/</code>; os números são somados aos já cadastrados), <code>email</code>, <code>data_nascimento</code>, <code>data_contratacao</code> e <code>data_demissao</code> (DD/MM/AAAA), <code>eh_gestor</code> (Sim/Não) e <code>gestor</code> (nome do gestor responsável, que precisa ser um colaborador ativo marcado como gestor — no cadastro ou nesta mesma planilha).</li>
+        <li>Quem trabalha em mais de uma empresa deve aparecer em <strong>uma linha por empresa</strong>, com o mesmo CPF: vira um único colaborador ligado a todas elas.</li>
+        <li>Colaboradores já cadastrados (mesmo CPF/CNPJ) são atualizados e passam a ter exatamente as empresas listadas na planilha; células opcionais vazias mantêm o valor atual.</li>
+        <li>Quem tiver <code>data_demissao</code> preenchida fica <strong>inativo</strong> (com data futura, só a partir desse dia). Pela planilha não é criado card no Kanban de desligamentos; quando precisar enviar o formulário de desligamento, inative pela tela do colaborador em vez da planilha.</li>
+        <li>Nada é gravado no envio: na próxima etapa você confere as linhas, <strong>corrige os erros direto na tela</strong> (ou descarta as linhas com erro) e só então confirma a importação.</li>
+    </ul>
+    <p class="mb-0"><a href="{% url 'pesquisas:colaborador_modelo_importacao' %}"><i class="bi bi-download"></i> Baixar planilha modelo</a></p>
+</div>
+
+{% if erros %}
+<div class="alert alert-danger" style="max-width: 900px;">
+    <strong>Não foi possível ler a planilha.</strong> Corrija o arquivo e envie novamente:
+    <ul class="mb-0 mt-2">
+        {% for erro in erros %}<li>{{ erro }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="card p-4" style="max-width: 900px;">
+    <form method="post" enctype="multipart/form-data" id="importarForm">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div class="mb-3">
+            {{ form.arquivo.label_tag }}
+            {{ form.arquivo }}
+            <div class="text-danger small">{{ form.arquivo.errors }}</div>
+        </div>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-upload"></i> Enviar e revisar</button>
+        <a class="btn btn-light" href="{% url 'pesquisas:colaborador_lista' %}">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

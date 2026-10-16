@@ -1,18 +1,15 @@
 {% load static %}
 <aside class="sidebar p-3 d-flex flex-column" id="sidebar">
-    <div class="sidebar-header d-flex align-items-center justify-content-between mb-3 flex-shrink-0 pb-1">
-        <a class="text-decoration-none d-flex align-items-center overflow-hidden" href="{% url 'pesquisas:dashboard' %}">
-            <img src="{% static 'pesquisas/img/logo-grupo-flexivel.png' %}" alt="Logo" class="sidebar-logo-full" style="height: 32px; object-fit: contain;">
-        </a>
-        <button class="btn btn-sm btn-outline-light" id="sidebarToggle" type="button" aria-label="Recolher ou expandir menu" aria-controls="sidebar" aria-expanded="true">
-            <i class="bi bi-chevron-left"></i>
+    <div class="sidebar-header d-flex align-items-center justify-content-end mb-2 flex-shrink-0">
+        <button class="btn btn-link p-1 border-0 shadow-none" id="sidebarToggle" type="button" aria-label="Recolher ou expandir menu" aria-controls="sidebar" aria-expanded="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg>
         </button>
     </div>
     
     <nav class="nav nav-pills flex-column gap-1 flex-grow-1">
         <!-- Módulo Geral -->
         {% if acesso.geral%}
-            <div class="small text-white-50 px-2 pt-1 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo Geral</div>
+            <div class="small text-white-50 px-2 pt-1 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.65rem; letter-spacing: .04em;">Módulo Geral</div>
 
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'pesquisas:dashboard' %}">
             <i class="bi bi-grid me-2"></i><span class="label">Dashboard / Relatórios</span>
@@ -29,7 +26,7 @@
 
         <!-- Módulo eNPS -->
         {% if acesso.enps %}
-        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo eNPS</div>
+        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.65rem; letter-spacing: .04em;">Módulo eNPS</div>
 
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'pesquisa_lista' %}active{% endif %}" href="{% url 'pesquisas:pesquisa_lista' %}">
             <i class="bi bi-ui-checks me-2"></i><span class="label">Gerenciar pesquisas</span>
@@ -41,9 +38,9 @@
 
         <!-- Módulo Desligamento -->
         {% if acesso.desligamentos %}
-        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo Desligamento</div>
+        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.65rem; letter-spacing: .04em;">Módulo Desligamento</div>
 
-        <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'kanban' %}active{% endif %}" href="{% url 'desligamentos:kanban' %}">
+        <a class="nav-link text-white text-nowrap {% if request.resolver_match.namespace == 'desligamentos' and request.resolver_match.url_name == 'kanban' %}active{% endif %}" href="{% url 'desligamentos:kanban' %}">
             <i class="bi bi-kanban me-2"></i><span class="label">Kanban de desligamentos</span>
         </a>
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'formulario_lista' or request.resolver_match.url_name == 'formulario_criar' %}active{% endif %}" href="{% url 'desligamentos:formulario_lista' %}">
@@ -53,16 +50,30 @@
 
         <!-- Módulo Recrutamento Interno -->
         {% if acesso.vagas %}
-        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Recrutamento Interno</div>
+        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.65rem; letter-spacing: .04em;">Recrutamento Interno</div>
 
         <a class="nav-link text-white text-nowrap {% if request.resolver_match.url_name == 'vaga_lista' or request.resolver_match.url_name == 'vaga_criar' or request.resolver_match.url_name == 'vaga_detalhe' or request.resolver_match.url_name == 'vaga_editar' %}active{% endif %}" href="{% url 'vagas:vaga_lista' %}">
             <i class="bi bi-briefcase me-2"></i><span class="label">Vagas internas</span>
         </a>
         {% endif %}
 
+        <!-- Módulo Período de Experiência -->
+        {% if acesso.experiencia or gestor_experiencia %}
+        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.65rem; letter-spacing: .04em;">Período de Experiência</div>
+
+        <a class="nav-link text-white text-nowrap {% if request.resolver_match.namespace == 'experiencia' and request.resolver_match.url_name == 'kanban' or request.resolver_match.url_name == 'avaliar' %}active{% endif %}" href="{% url 'experiencia:kanban' %}">
+            <i class="bi bi-hourglass-split me-2"></i><span class="label">Kanban de experiência</span>
+        </a>
+        {% if rh_experiencia %}
+        <a class="nav-link text-white text-nowrap {% if request.resolver_match.namespace == 'experiencia' and request.resolver_match.url_name != 'kanban' and request.resolver_match.url_name != 'avaliar' %}active{% endif %}" href="{% url 'experiencia:avaliacoes_painel' %}">
+            <i class="bi bi-clipboard-check me-2"></i><span class="label">Gerenciar avaliações</span>
+        </a>
+        {% endif %}
+        {% endif %}
+
         <!-- Módulo Banco de Talentos -->
         {% if acesso.talentos %}
-        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Banco de Talentos</div>
+        <div class="small text-white-50 px-2 pt-3 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.65rem; letter-spacing: .04em;">Banco de Talentos</div>
 
         {% with rota=request.resolver_match.url_name %}
         {% if acesso.talentos_dashboard %}
@@ -103,23 +114,15 @@
         {% endif %}
     </nav>
 
-    <!-- Módulo Administrativo e Rodapé -->
+    <!-- Módulo Administrativo -->
+    {% if acesso.administrativo %}
     <div class="pt-3 border-top border-secondary flex-shrink-0 overflow-hidden">
-        {% if acesso.administrativo %}
-            <div class="small text-white-50 px-2 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.7rem;">Módulo Administrativo</div>
-            <a class="nav-link text-white text-nowrap mb-2" href="{% url 'admin:index' %}">
-                <i class="bi bi-gear me-2"></i><span class="label">Admin Django</span>
-            </a>
-        {% endif %}
-
-        <div class="user-info small text-white-50 mb-2 px-2 text-nowrap">{{ user.get_full_name|default:user.username }}</div>
-        <form method="post" action="{% url 'logout' %}">
-            {% csrf_token %}
-            <button class="nav-link text-white text-nowrap border-0 bg-transparent w-100 text-start" type="submit">
-                <i class="bi bi-box-arrow-left me-2"></i><span class="label">Sair</span>
-            </button>
-        </form>
+        <div class="small text-white-50 px-2 pb-1 text-uppercase fw-bold text-nowrap" style="font-size: 0.65rem; letter-spacing: .04em;">Módulo Administrativo</div>
+        <a class="nav-link text-white text-nowrap" href="{% url 'admin:index' %}">
+            <i class="bi bi-gear me-2"></i><span class="label">Admin Django</span>
+        </a>
     </div>
+    {% endif %}
 </aside>
 
 <style>

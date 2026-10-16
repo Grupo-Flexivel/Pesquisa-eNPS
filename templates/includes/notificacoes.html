@@ -1,0 +1,41 @@
+<div class="notificacoes-topbar">
+    <div class="dropdown">
+        <button class="btn btn-light position-relative rounded-circle notificacoes-sino" type="button"
+                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
+                aria-label="Notificações{% if total_notificacoes_nao_lidas %} ({{ total_notificacoes_nao_lidas }} não lidas){% endif %}">
+            <i class="bi bi-bell{% if total_notificacoes_nao_lidas %}-fill{% endif %}"></i>
+            {% if total_notificacoes_nao_lidas %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">
+                    {% if total_notificacoes_nao_lidas > 99 %}99+{% else %}{{ total_notificacoes_nao_lidas }}{% endif %}
+                </span>
+            {% endif %}
+        </button>
+        <div class="dropdown-menu dropdown-menu-end shadow p-0 notificacoes-menu">
+            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                <span class="fw-semibold">Notificações</span>
+                {% if total_notificacoes_nao_lidas %}
+                <form method="post" action="{% url 'notificacoes:marcar_todas_lidas' %}">
+                    {% csrf_token %}
+                    <button class="btn btn-link btn-sm p-0 text-decoration-none" type="submit">Marcar todas como lidas</button>
+                </form>
+                {% endif %}
+            </div>
+            {% for n in notificacoes_nao_lidas %}
+                <form method="post" action="{% url 'notificacoes:abrir' n.pk %}">
+                    {% csrf_token %}
+                    <button class="dropdown-item text-wrap py-2 border-bottom" type="submit">
+                        <div class="small">{{ n.mensagem }}</div>
+                        <div class="text-secondary" style="font-size: .75rem;">{{ n.criada_em|date:'d/m/Y H:i' }}</div>
+                    </button>
+                </form>
+            {% empty %}
+                <div class="text-secondary small text-center px-3 py-4">Nenhuma notificação nova.</div>
+            {% endfor %}
+            {% if total_notificacoes_nao_lidas > notificacoes_nao_lidas|length %}
+                <div class="text-secondary small text-center px-3 py-2">
+                    Exibindo {{ notificacoes_nao_lidas|length }} de {{ total_notificacoes_nao_lidas }}.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

@@ -144,9 +144,23 @@ class PerfilAcessoAdmin(admin.ModelAdmin):
 
 @admin.register(Colaborador)
 class ColaboradorAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'documento', 'empresa', 'ativo')
-    list_filter = ('empresa', 'ativo')
-    search_fields = ('nome', 'documento', 'empresa__nome')
+    list_display = ('nome', 'documento', 'nomes_empresas', 'eh_gestor', 'gestor', 'data_contratacao', 'data_demissao', 'ativo')
+    list_filter = ('empresas', 'ativo', 'eh_gestor')
+    search_fields = ('nome', 'documento', 'empresas__nome')
+    list_select_related = ('gestor',)
+    filter_horizontal = ('empresas',)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related('empresas')
+
+    @admin.display(description='Empresas')
+    def nomes_empresas(self, obj):
+        return obj.nomes_empresas
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'gestor':
+            kwargs['queryset'] = Colaborador.objects.filter(eh_gestor=True).order_by('nome')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 @admin.register(Empresa)

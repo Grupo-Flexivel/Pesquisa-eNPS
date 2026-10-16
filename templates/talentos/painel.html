@@ -42,7 +42,7 @@
             <div class="mb-2">
                 <div class="d-flex justify-content-between small"><span>{{ etapa.rotulo }}</span><span class="fw-semibold">{{ etapa.total }}</span></div>
                 <div class="progress" style="height: 8px;" role="progressbar" aria-label="{{ etapa.rotulo }}" aria-valuenow="{{ etapa.percentual }}" aria-valuemin="0" aria-valuemax="100">
-                    <div class="progress-bar" style="width: {{ etapa.percentual }}%; background-color: #004b46;"></div>
+                    <div class="progress-bar" style="width: {{ etapa.percentual }}%; background-color: #003d3d;"></div>
                 </div>
             </div>
             {% endfor %}
@@ -56,7 +56,7 @@
             {% for item in por_departamento %}
             <div class="mb-2">
                 <div class="d-flex justify-content-between small"><span>{{ item.departamento|default:"Sem cargo definido" }}</span><span class="fw-semibold">{{ item.total }}</span></div>
-                <div class="progress" style="height: 8px;"><div class="progress-bar" style="width: {% widthratio item.total maximo_departamento 100 %}%; background-color: #004b46;"></div></div>
+                <div class="progress" style="height: 8px;"><div class="progress-bar" style="width: {% widthratio item.total maximo_departamento 100 %}%; background-color: #003d3d;"></div></div>
             </div>
             {% empty %}<p class="text-secondary mb-0">Sem dados ainda.</p>{% endfor %}
         </div>
@@ -65,7 +65,7 @@
             {% for item in por_cidade %}
             <div class="mb-2">
                 <div class="d-flex justify-content-between small"><span>{{ item.cidade }}</span><span class="fw-semibold">{{ item.total }}</span></div>
-                <div class="progress" style="height: 8px;"><div class="progress-bar" style="width: {% widthratio item.total maximo_cidade 100 %}%; background-color: #004b46;"></div></div>
+                <div class="progress" style="height: 8px;"><div class="progress-bar" style="width: {% widthratio item.total maximo_cidade 100 %}%; background-color: #003d3d;"></div></div>
             </div>
             {% empty %}<p class="text-secondary mb-0">Sem dados ainda.</p>{% endfor %}
         </div>

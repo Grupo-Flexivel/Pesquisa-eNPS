@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block title %}Kanban · período de experiência{% endblock %}
+
+{% block extra_css %}
+<style>
+    .kanban-board { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 1rem; align-items: start; }
+    @media (max-width: 1199.98px) { .kanban-board { grid-template-columns: repeat(2, minmax(240px, 1fr)); } }
+    @media (max-width: 767.98px) { .kanban-board { grid-template-columns: 1fr; } }
+    .kanban-col { background: #eef0f5; border-radius: 1rem; padding: .9rem; min-height: 200px; }
+    .kanban-col h2 { font-size: .95rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #4a4d63; }
+    .kanban-card { background: white; border-radius: .8rem; padding: .9rem; margin-bottom: .75rem; box-shadow: 0 .15rem .5rem rgba(25,24,52,.07); scroll-margin-top: 1rem; }
+    .kanban-card:last-child { margin-bottom: 0; }
+    .kanban-card.salvando { opacity: .6; pointer-events: none; }
+    .kanban-card:target { outline: 2px solid #003d3d; }
+    .kanban-empty { color: #9497ac; font-size: .85rem; text-align: center; padding: 1.5rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+    <div>
+        <h1 class="h3 mb-1">Kanban de período de experiência</h1>
+        <p class="text-secondary mb-0">
+            Contrato de experiência de 90 dias corridos a partir da data de contratação.
+            {% if pode_gerir %}O gestor responsável responde o formulário de avaliação, com a decisão final; cabe ao RH acompanhar e incluir os benefícios dos efetivados.{% else %}Quando o colaborador entrar em "Vencendo", responda o formulário de avaliação: a decisão final (efetivar ou desligar) move o card automaticamente.{% endif %}
+        </p>
+    </div>
+    {% if pode_gerir %}
+    <a class="btn btn-outline-secondary" href="{% url 'experiencia:avaliacoes_painel' %}">
+        <i class="bi bi-clipboard-check"></i> Gerenciar avaliações
+    </a>
+    {% endif %}
+</div>
+
+{% if sem_formulario_padrao %}
+<div class="alert alert-warning">
+    {% if pode_gerir %}
+        Nenhum formulário de avaliação cadastrado: os gestores não conseguem avaliar.
+        <a href="{% url 'experiencia:formulario_criar' %}" class="alert-link">Cadastrar formulário</a>.
+    {% else %}
+        O RH ainda não cadastrou o formulário de avaliação de experiência.
+    {% endif %}
+</div>
+{% endif %}
+
+{% csrf_token %}
+<div class="kanban-board" id="quadro">
+    {% for coluna in colunas %}
+    <section class="kanban-col" aria-label="{{ coluna.rotulo }}">
+        <h2 class="mb-1">{{ coluna.rotulo }} <span class="badge text-bg-secondary">{{ coluna.cards|length }}</span></h2>
+        <div class="small text-secondary mb-3">{{ coluna.descricao }}</div>
+        <div>
+            {% for p in coluna.cards %}
+            {% with c=p.colaborador %}
+            <article class="kanban-card" id="periodo-{{ p.pk }}" data-id="{{ p.pk }}">
+                <div class="fw-semibold">{{ c.nome }}</div>
+                <div class="small text-secondary">{{ c.nomes_empresas }}</div>
+                <div class="small text-secondary mb-2">
+                    Gestor: {% if c.gestor %}{{ c.gestor.nome }}{% if not c.gestor.usuario_id %} <i class="bi bi-exclamation-circle text-warning" title="Gestor sem login no painel: o aviso de avaliação vai para o RH."></i>{% endif %}{% else %}<span class="text-warning-emphasis">não definido</span>{% endif %}
+                </div>
+                <div class="small mb-2">
+                    <div><i class="bi bi-calendar-check"></i> Contratação: {{ c.data_contratacao|date:'d/m/Y'|default:'—' }}</div>
+                    <div><i class="bi bi-calendar-x"></i> Fim da experiência: {{ p.fim_experiencia|date:'d/m/Y'|default:'—' }}</div>
+                </div>
+
+                {% if p.status == 'DENTRO_PRAZO' or p.status == 'VENCENDO' %}
+                    {% with dias=p.dias_restantes %}
+                    {% if dias is not None %}
+                    <span class="badge {% if p.status == 'VENCENDO' %}text-bg-warning{% else %}text-bg-success{% endif %} mb-2">
+                        {% if dias == 0 %}Vence hoje{% elif dias == 1 %}Falta 1 dia{% else %}Faltam {{ dias }} dias{% endif %}
+                    </span>
+                    {% endif %}
+                    {% endwith %}
+                {% endif %}
+
+                {% if p.status == 'DENTRO_PRAZO' and p.avaliacao_liberada_em %}
+                    <div class="small text-secondary">Avaliação liberada em {{ p.avaliacao_liberada_em|date:'d/m/Y' }}</div>
+                {% endif %}
+
+                {% if p.status == 'VENCENDO' %}
+                    <div class="small mb-2">
+                        Avaliação: <span class="badge {% if p.avaliacao_realizada %}text-bg-success{% else %}text-bg-light border{% endif %}">{{ p.get_status_avaliacao_display }}</span>
+                    </div>
+                    {% if c.gestor and c.gestor.usuario_id == user.pk %}
+                        <a class="btn btn-sm btn-primary w-100 mb-2" href="{{ p.caminho_avaliacao }}">
+                            <i class="bi bi-pencil-square"></i> Preencher avaliação
+                        </a>
+                    {% elif not c.gestor.usuario_id %}
+                        <div class="small text-warning-emphasis mb-2">Defina um gestor com login no painel: só ele pode responder a avaliação.</div>
+                    {% else %}
+                        <div class="small text-secondary mb-2">Aguardando o gestor responder o formulário.</div>
+                    {% endif %}
+                    <label class="small text-secondary" for="link-{{ p.pk }}">Link da avaliação</label>
+                    <div class="input-group input-group-sm">
+                        <input class="form-control" readonly value="{{ p.link_avaliacao }}" id="link-{{ p.pk }}">
+                        <button class="btn btn-outline-secondary copiar-link" type="button" data-target="link-{{ p.pk }}" title="Copiar link">
+                            <i class="bi bi-copy"></i>
+                        </button>
+                    </div>
+                {% endif %}
+
+                {% if p.status == 'EFETIVADO' %}
+                    {% if p.efetivado_automaticamente %}
+                        <span class="badge text-bg-info mb-2" title="O período terminou sem a avaliação do gestor.">Efetivado automaticamente</span>
+                    {% endif %}
+                    <div class="small text-secondary">Efetivado em {{ p.status_alterado_em|date:'d/m/Y' }}</div>
+                    {% if pode_gerir %}
+                    <div class="form-check mt-2">
+                        <input class="form-check-input beneficios-check" type="checkbox" id="beneficios-{{ p.pk }}"
+                               data-url="{% url 'experiencia:beneficios' p.pk %}" data-nome="{{ c.nome }}">
+                        <label class="form-check-label small" for="beneficios-{{ p.pk }}">Inclusão de benefícios finalizada</label>
+                    </div>
+                    {% endif %}
+                {% endif %}
+
+                {% if p.status == 'DESLIGADO' %}
+                    <div class="small text-secondary">Desligado em {{ p.status_alterado_em|date:'d/m/Y' }}</div>
+                    <div class="small text-secondary">Sai do quadro em {{ p.sai_do_quadro_em|date:'d/m/Y' }}</div>
+                    {% if c.ativo %}<span class="badge text-bg-light border mt-1" title="Inative o colaborador em Gerenciar colaboradores para iniciar o desligamento.">Colaborador ainda ativo no cadastro</span>{% endif %}
+                    {% if pode_gerir %}
+                    <button class="btn btn-sm btn-outline-secondary w-100 mt-2 arquivar-btn" type="button"
+                            data-url="{% url 'experiencia:arquivar' p.pk %}" data-nome="{{ c.nome }}">
+                        <i class="bi bi-archive"></i> Arquivar
+                    </button>
+                    {% endif %}
+                {% endif %}
+
+                {% if p.avaliacao_realizada and p.status != 'VENCENDO' %}
+                    <a class="btn btn-sm btn-link px-0 mt-1" href="{% if pode_gerir %}{% url 'experiencia:avaliacao_respostas' p.pk %}{% else %}{{ p.caminho_avaliacao }}{% endif %}">
+                        <i class="bi bi-eye"></i> Ver avaliação
+                    </a>
+                {% endif %}
+            </article>
+            {% endwith %}
+            {% empty %}
+                <div class="kanban-empty">Nenhum colaborador nesta coluna.</div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const quadro = document.getElementById('quadro');
+    const token = document.querySelector('input[name=csrfmiddlewaretoken]').value;
+
+    async function enviar(url, dados) {
+        const resposta = await fetch(url, {
+            method: 'POST',
+            headers: {'X-CSRFToken': token, 'X-Requested-With': 'XMLHttpRequest'},
+            body: new URLSearchParams(dados),
+            credentials: 'same-origin',
+        });
+        let corpo = {};
+        try { corpo = await resposta.json(); } catch (e) { /* resposta não-JSON (ex.: 403 HTML) */ }
+        if (!resposta.ok || !corpo.ok) throw new Error(corpo.erro || 'Não foi possível concluir a ação. Tente novamente.');
+        return corpo;
+    }
+
+    async function executar(cartao, url) {
+        cartao.classList.add('salvando');
+        try {
+            await enviar(url, {});
+            window.location.reload();
+        } catch (erro) {
+            cartao.classList.remove('salvando');
+            throw erro;
+        }
+    }
+
+    quadro.addEventListener('change', async e => {
+        const check = e.target;
+        if (!check.classList.contains('beneficios-check') || !check.checked) return;
+        if (!confirm(`Confirmar a inclusão de benefícios de ${check.dataset.nome}? O colaborador sairá deste Kanban.`)) {
+            check.checked = false;
+            return;
+        }
+        try {
+            await executar(check.closest('.kanban-card'), check.dataset.url);
+        } catch (erro) {
+            check.checked = false;
+            alert(erro.message);
+        }
+    });
+
+    quadro.addEventListener('click', async e => {
+        const copiar = e.target.closest('.copiar-link');
+        if (copiar) {
+            await navigator.clipboard.writeText(document.getElementById(copiar.dataset.target).value);
+            copiar.innerHTML = '<i class="bi bi-check2"></i>';
+            setTimeout(() => copiar.innerHTML = '<i class="bi bi-copy"></i>', 1200);
+            return;
+        }
+
+        const arquivar = e.target.closest('.arquivar-btn');
+        if (!arquivar || !confirm(`Arquivar o card de ${arquivar.dataset.nome}? Ele sairá deste Kanban.`)) return;
+        try {
+            await executar(arquivar.closest('.kanban-card'), arquivar.dataset.url);
+        } catch (erro) {
+            alert(erro.message);
+        }
+    });
+})();
+</script>
+{% endblock %}

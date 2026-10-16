@@ -19,6 +19,7 @@ from django.core.exceptions import PermissionDenied
 ENPS = 'enps'
 DESLIGAMENTOS = 'desligamentos'
 VAGAS = 'vagas'
+EXPERIENCIA = 'experiencia'
 GERAL = 'geral'
 TALENTOS = 'talentos'
 TALENTOS_DASHBOARD = 'talentos.dashboard'
@@ -33,6 +34,7 @@ MODULOS_CHOICES = [
     (ENPS, 'eNPS'),
     (DESLIGAMENTOS, 'Desligamento'),
     (VAGAS, 'Recrutamento interno (vagas)'),
+    (EXPERIENCIA, 'Período de experiência'),
     (TALENTOS, 'Banco de Talentos (todos os submódulos)'),
     (TALENTOS_DASHBOARD, 'Banco de Talentos › Dashboard'),
     (TALENTOS_ORGANIZACAO, 'Banco de Talentos › Estrutura organizacional'),
@@ -64,6 +66,14 @@ def usuario_tem_acesso(user, *chaves):
         
     return any(_chave_coberta(set(permitidas), chave) for chave in chaves)
 
+def usuarios_com_acesso(*chaves):
+    """Usuários ativos do painel que acessam QUALQUER uma das chaves (destinatários de notificações)."""
+    from django.contrib.auth import get_user_model
+
+    usuarios = get_user_model().objects.filter(is_active=True, is_staff=True).select_related('perfil_personalizado')
+    return [usuario for usuario in usuarios if usuario_tem_acesso(usuario, *chaves)]
+
+
 def contexto_acesso(user):
     """Flags usadas pela sidebar para renderizar apenas o que o usuário pode ver."""
     return {
@@ -71,7 +81,8 @@ def contexto_acesso(user):
         'enps': usuario_tem_acesso(user, ENPS),
         'desligamentos': usuario_tem_acesso(user, DESLIGAMENTOS),
         'vagas': usuario_tem_acesso(user, VAGAS),
-        'colaboradores': usuario_tem_acesso(user, ENPS, DESLIGAMENTOS),
+        'experiencia': usuario_tem_acesso(user, EXPERIENCIA),
+        'colaboradores': usuario_tem_acesso(user, GERAL, ENPS, DESLIGAMENTOS),
         'talentos_organizacao': usuario_tem_acesso(user, TALENTOS_ORGANIZACAO),
         'talentos_curriculos': usuario_tem_acesso(user, TALENTOS_CURRICULOS),
         'talentos_dashboard': usuario_tem_acesso(user, TALENTOS_DASHBOARD),
@@ -92,6 +103,8 @@ def pagina_inicial(user):
         return 'pesquisas:dashboard'
     if usuario_tem_acesso(user, VAGAS):
         return 'vagas:vaga_lista'
+    if usuario_tem_acesso(user, EXPERIENCIA):
+        return 'experiencia:kanban'
     if usuario_tem_acesso(user, TALENTOS_DASHBOARD):
         return 'talentos:painel'
     if usuario_tem_acesso(user, TALENTOS_KANBAN):
